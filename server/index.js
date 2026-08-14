@@ -151,7 +151,7 @@ const server = http.createServer(async (req, res) => {
 
   const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
 
-  if (req.method === 'GET' && url.pathname === '/health') {
+  if (req.method === 'GET' && (url.pathname === '/' || url.pathname === '/health')) {
     send(res, 200, { ok: true, service: 'gd-desktop-api' });
     return;
   }
