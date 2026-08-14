@@ -1,0 +1,76 @@
+.gd-fb-overlay {
+  position: fixed; inset: 0; z-index: 90;
+  background: rgba(6, 6, 12, 0.72);
+  display: grid; place-items: center;
+  padding: 24px;
+  -webkit-app-region: no-drag;
+}
+.gd-fb-modal {
+  position: relative;
+  width: min(480px, 100%);
+  background: #12121b;
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 18px;
+  padding: 22px 22px 18px;
+  box-shadow: 0 24px 64px rgba(0,0,0,0.45);
+}
+.gd-fb-close {
+  position: absolute; top: 10px; right: 12px;
+  border: none; background: transparent;
+  color: rgba(255,255,255,0.45); font-size: 26px; line-height: 1; cursor: pointer;
+}
+.gd-fb-close:hover { color: #fff; }
+.gd-fb-modal h2 {
+  margin: 0;
+  font-family: var(--gd-font-display);
+  font-size: 20px; font-weight: 700;
+}
+.gd-fb-lead, .gd-fb-meta {
+  margin: 6px 0 14px;
+  font-size: 12px; color: var(--gd-text-muted);
+}
+.gd-fb-kinds { display: flex; gap: 6px; margin-bottom: 14px; }
+.gd-fb-kinds button {
+  flex: 1;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.08);
+  color: var(--gd-text-muted);
+  border-radius: 10px; padding: 8px 10px;
+  font-size: 12px; font-weight: 800; cursor: pointer;
+}
+.gd-fb-kinds button.is-on {
+  color: #ffd76b;
+  border-color: rgba(255,215,107,0.4);
+  background: rgba(255,215,107,0.12);
+}
+.gd-fb-modal label {
+  display: flex; flex-direction: column; gap: 6px;
+  margin-bottom: 12px;
+  font-size: 11px; font-weight: 700; color: var(--gd-text-muted);
+  text-transform: uppercase; letter-spacing: 0.05em;
+}
+.gd-fb-modal input, .gd-fb-modal textarea {
+  background: #0e1018;
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 10px;
+  padding: 10px 12px;
+  color: #fff;
+  font: 13px/1.4 var(--gd-font-body);
+  text-transform: none; letter-spacing: 0; font-weight: 500;
+  resize: vertical;
+}
+.gd-fb-modal input:focus, .gd-fb-modal textarea:focus {
+  outline: none;
+  border-color: rgba(124,92,255,0.55);
+}
+.gd-fb-error { color: #ff5c68; font-size: 13px; margin: 0 0 10px; }
+.gd-fb-submit {
+  width: 100%;
+  border: none;
+  background: linear-gradient(135deg, var(--gd-violet), #6a4de8);
+  color: #fff; border-radius: 12px; padding: 11px 16px;
+  font-weight: 700; cursor: pointer;
+}
+.gd-fb-submit:disabled { opacity: 0.6; cursor: default; }
+.gd-fb-done { display: flex; flex-direction: column; gap: 8px; }
+.gd-fb-done p { margin: 0 0 8px; color: var(--gd-text-muted); }

@@ -1,0 +1,133 @@
+.gd-sidebar {
+  width: 232px;
+  flex-shrink: 0;
+  background: #0c0e18;
+  border-right: 1px solid rgba(255, 255, 255, 0.06);
+  display: flex;
+  flex-direction: column;
+  padding: 10px 12px 16px;
+  height: 100%;
+  position: sticky;
+  top: 0;
+}
+
+.gd-sidebar__brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--gd-font-display);
+  padding: 4px 10px 18px;
+}
+.gd-brand__mark {
+  font-weight: 700;
+  font-size: 15px;
+  color: var(--gd-bg);
+  background: linear-gradient(135deg, var(--gd-violet), var(--gd-gold));
+  padding: 6px 8px;
+  border-radius: 8px;
+  line-height: 1;
+}
+.gd-brand__text { display: flex; flex-direction: column; gap: 1px; }
+.gd-brand__name {
+  font-weight: 700; letter-spacing: 0.08em; font-size: 13px;
+  text-transform: uppercase; color: var(--gd-text-primary);
+}
+.gd-brand__ver { font-size: 10px; color: var(--gd-text-faint); font-weight: 600; letter-spacing: 0.04em; }
+
+.gd-sidebar__nav { display: flex; flex-direction: column; gap: 18px; flex: 1; overflow-y: auto; }
+.gd-sidebar__group { display: flex; flex-direction: column; gap: 2px; }
+.gd-sidebar__group-label {
+  font-size: 10px; font-weight: 700; color: var(--gd-text-faint);
+  letter-spacing: 0.12em; text-transform: uppercase;
+  padding: 0 12px 6px;
+}
+
+.gd-sidebar__link {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  color: var(--gd-text-muted);
+  text-decoration: none;
+  font-size: 13px;
+  font-weight: 500;
+  position: relative;
+  transition: background 140ms var(--gd-ease), color 140ms var(--gd-ease);
+}
+.gd-sidebar__link:hover { background: rgba(255, 255, 255, 0.04); color: var(--gd-text-primary); }
+.gd-sidebar__link--active {
+  background: rgba(124, 92, 255, 0.12);
+  color: #d7ccff;
+}
+.gd-sidebar__link--active::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 8px; bottom: 8px; width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: var(--gd-violet);
+}
+.gd-sidebar__icon {
+  width: 18px; height: 18px; display: grid; place-items: center; flex-shrink: 0;
+}
+.gd-sidebar__icon svg { width: 16px; height: 16px; display: block; }
+
+.gd-sidebar__link--soon {
+  opacity: 0.45; cursor: default;
+}
+.gd-sidebar__link--soon:hover { background: transparent; color: var(--gd-text-muted); }
+.gd-sidebar__soon {
+  margin-left: auto;
+  font-size: 9px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--gd-text-faint);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 999px; padding: 2px 6px;
+}
+
+.gd-sidebar__login {
+  text-align: center;
+  padding: 10px;
+  border: 1px solid rgba(124, 92, 255, 0.28);
+  border-radius: 10px;
+  color: var(--gd-text-primary);
+  text-decoration: none;
+  font-size: 13px;
+  font-weight: 600;
+  transition: background 140ms var(--gd-ease);
+  margin-top: 12px;
+}
+.gd-sidebar__login:hover { background: var(--gd-violet-soft); }
+.gd-sidebar__account {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border: 1px solid rgba(124, 92, 255, 0.28);
+  border-radius: 10px;
+  background: rgba(124, 92, 255, 0.06);
+}
+.gd-sidebar__account-id {
+  font-size: 12px; font-weight: 700;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.gd-sidebar__account-actions {
+  display: flex; gap: 8px; margin-top: 8px;
+}
+.gd-sidebar__account-actions a,
+.gd-sidebar__account-actions button {
+  flex: 1;
+  text-align: center;
+  font-size: 11px; font-weight: 700;
+  padding: 6px 0;
+  border-radius: 8px;
+  text-decoration: none;
+  cursor: pointer;
+  font-family: var(--gd-font-body);
+}
+.gd-sidebar__account-actions a {
+  background: rgba(255,255,255,0.08);
+  color: var(--gd-text-primary);
+}
+.gd-sidebar__account-actions button {
+  border: 1px solid rgba(255,92,104,0.35);
+  background: transparent;
+  color: #ff8a93;
+}

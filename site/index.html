@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GD Esports Desktop</title>
+  <meta name="description" content="Windows desktop app for League of Legends stats: dashboard, live scouting, match history, champion pool, and player compare." />
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <div class="wrap">
+    <nav class="nav">
+      <a class="brand" href="./index.html">
+        <span class="mark">GD</span>
+        <strong>GD Esports</strong>
+      </a>
+      <div class="nav-links">
+        <a href="#features">Features</a>
+        <a href="#download">Download</a>
+        <a href="./privacy.html">Privacy</a>
+        <a href="./terms.html">Terms</a>
+      </div>
+    </nav>
+
+    <header class="hero">
+      <div class="kicker">League of Legends · Windows</div>
+      <h1>Your ranked games,<br>read like a review.</h1>
+      <p class="lead">
+        GD Esports Desktop is a local Windows app for players who want ranked context:
+        live scouting, post-game recap, champion pool, and match history — linked to your own Riot ID.
+      </p>
+      <div class="cta" id="download">
+        <a class="btn btn-primary" id="downloadBtn" href="#download">Download for Windows</a>
+        <a class="btn btn-ghost" id="releasesBtn" href="#download">GitHub Releases</a>
+      </div>
+      <p class="note" id="downloadNote">v0.1.0 · Private beta. Requires Windows 10/11.</p>
+    </header>
+
+    <div class="window" aria-hidden="true">
+      <div class="window-bar">
+        <span class="dot"></span>
+        GD Esports Desktop
+      </div>
+      <div class="window-body">
+        <aside class="side">
+          <div class="on">Dashboard</div>
+          <div>History</div>
+          <div>Champions</div>
+          <div>Live Status</div>
+          <div>Compare</div>
+        </aside>
+        <div class="main">
+          <div class="stat-row">
+            <div class="stat"><span>KDA</span><strong>2.9</strong></div>
+            <div class="stat"><span>CS/min</span><strong>5.7</strong></div>
+            <div class="stat"><span>Gold @15</span><strong>+210</strong></div>
+            <div class="stat"><span>KP</span><strong>0.51</strong></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <section id="features" class="grid">
+      <article class="card">
+        <h3>Dashboard</h3>
+        <p>Rank, LP, KDA, DPM, vision, gold diff @15, and recent form from your linked Riot ID.</p>
+      </article>
+      <article class="card">
+        <h3>Live Status</h3>
+        <p>See the current game: champions, runes, ranked WR, last 3 results, and dodge warnings.</p>
+      </article>
+      <article class="card">
+        <h3>Match history</h3>
+        <p>Scrollable list with Solo / Flex / ARAM / Normal filters. Open a recap with build and gold @15.</p>
+      </article>
+      <article class="card">
+        <h3>Champions</h3>
+        <p>Pool stats per champion: games, winrate, KDA, and CS per minute.</p>
+      </article>
+      <article class="card">
+        <h3>Compare</h3>
+        <p>Side-by-side rank, winrate, shared champions, and recent form for two Riot IDs.</p>
+      </article>
+      <article class="card">
+        <h3>Your account only</h3>
+        <p>You link Name#Tag. Data is fetched from Riot on demand for that player. Not a public scraper.</p>
+      </article>
+    </section>
+
+    <p class="riot">
+      GD Esports Desktop isn't endorsed by Riot Games and doesn't reflect the views or opinions of Riot Games
+      or anyone officially involved in producing or managing League of Legends.
+      League of Legends and Riot Games are trademarks or registered trademarks of Riot Games, Inc.
+    </p>
+  </div>
+
+  <footer class="foot">
+    <div class="wrap" style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;width:min(1080px, calc(100% - 40px));">
+      <span>© <span id="year"></span> GD Esports</span>
+      <span>
+        <a href="./privacy.html">Privacy Policy</a> ·
+        <a href="./terms.html">Terms of Service</a>
+      </span>
+    </div>
+  </footer>
+
+  <script src="./config.js"></script>
+  <script>
+    document.getElementById('year').textContent = new Date().getFullYear();
+    const cfg = window.GD_SITE || {};
+    const btn = document.getElementById('downloadBtn');
+    const rel = document.getElementById('releasesBtn');
+    const note = document.getElementById('downloadNote');
+    if (cfg.version) note.textContent = 'v' + cfg.version + ' · Windows 10/11 · unsigned beta (SmartScreen may warn)';
+    if (cfg.github) {
+      const base = 'https://github.com/' + cfg.github;
+      rel.href = base + '/releases/latest';
+      btn.href = base + '/releases/latest';
+    } else {
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        alert('Create a GitHub repo, set github in site/config.js, then this button will point at Releases.');
+      });
+      rel.addEventListener('click', (e) => {
+        e.preventDefault();
+        alert('Set window.GD_SITE.github in site/config.js to yourname/repo.');
+      });
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,175 @@
+.gd-titlebar {
+  height: 52px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 0 0 12px;
+  background: #0b0c12;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  -webkit-app-region: drag;
+  user-select: none;
+  z-index: 50;
+}
+.gd-titlebar__left,
+.gd-titlebar__right,
+.gd-titlebar__nav,
+.gd-titlebar__search,
+.gd-titlebar__icon-btn,
+.gd-titlebar__feedback,
+.gd-titlebar__profile,
+.gd-titlebar__win {
+  -webkit-app-region: no-drag;
+}
+
+.gd-titlebar__left {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-shrink: 0;
+}
+.gd-titlebar__brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.gd-titlebar__mark {
+  font-family: var(--gd-font-display);
+  font-weight: 700;
+  font-size: 11px;
+  color: var(--gd-bg);
+  background: linear-gradient(135deg, var(--gd-violet), var(--gd-gold));
+  padding: 5px 7px;
+  border-radius: 7px;
+  line-height: 1;
+}
+.gd-titlebar__names { display: flex; flex-direction: column; line-height: 1.1; }
+.gd-titlebar__name {
+  font-family: var(--gd-font-display);
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: 0.04em;
+}
+.gd-titlebar__ver {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--gd-text-faint);
+}
+
+.gd-titlebar__nav { display: flex; align-items: center; gap: 2px; }
+.gd-titlebar__icon-btn {
+  width: 30px; height: 30px;
+  display: grid; place-items: center;
+  border: none; background: transparent;
+  color: var(--gd-text-muted);
+  border-radius: 8px;
+  cursor: pointer;
+  padding: 0;
+}
+.gd-titlebar__icon-btn svg { width: 16px; height: 16px; display: block; }
+.gd-titlebar__icon-btn:hover { color: #fff; background: rgba(255,255,255,0.06); }
+
+.gd-titlebar__search {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  max-width: 560px;
+  margin: 0 auto;
+  height: 34px;
+  background: rgba(255, 255, 255, 0.045);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 999px;
+  padding: 0 14px;
+  gap: 10px;
+}
+.gd-titlebar__search:focus-within {
+  border-color: rgba(255,255,255,0.16);
+  background: rgba(255,255,255,0.06);
+}
+.gd-titlebar__search-icon { width: 15px; height: 15px; color: var(--gd-text-muted); flex-shrink: 0; }
+.gd-titlebar__search input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--gd-text-primary);
+  font-size: 13px;
+  font-family: var(--gd-font-body);
+  min-width: 0;
+}
+.gd-titlebar__search input::placeholder { color: var(--gd-text-muted); }
+
+.gd-titlebar__right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+  height: 100%;
+  flex-shrink: 0;
+}
+.gd-titlebar__feedback {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 32px;
+  padding: 0 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.04);
+  color: var(--gd-text-muted);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+  font-family: var(--gd-font-body);
+  white-space: nowrap;
+}
+.gd-titlebar__feedback svg { width: 14px; height: 14px; }
+.gd-titlebar__feedback:hover { color: #fff; border-color: rgba(255,255,255,0.16); }
+
+.gd-titlebar__profile {
+  max-width: 160px;
+  height: 32px;
+  padding: 0 12px;
+  border: none;
+  border-radius: 8px;
+  background: linear-gradient(135deg, rgba(124,92,255,0.35), rgba(255,180,84,0.22));
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--gd-font-body);
+}
+
+.gd-titlebar__win {
+  display: flex;
+  align-items: stretch;
+  height: 100%;
+  margin-left: 4px;
+}
+.gd-win-btn {
+  width: 46px;
+  height: 100%;
+  border: none;
+  background: transparent;
+  color: var(--gd-text-muted);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  padding: 0;
+}
+.gd-win-btn svg { width: 12px; height: 12px; display: block; }
+.gd-win-btn:hover { background: rgba(255,255,255,0.08); color: #fff; }
+.gd-win-btn--close:hover { background: #e81123; color: #fff; }
+
+@media (max-width: 1100px) {
+  .gd-titlebar__feedback { display: none; }
+}
+@media (max-width: 860px) {
+  .gd-titlebar__profile, .gd-titlebar__ver { display: none; }
+}

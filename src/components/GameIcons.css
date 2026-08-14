@@ -1,0 +1,18 @@
+.gd-champ-icon, .gd-item-icon, .gd-spell-icon, .gd-rune-icon {
+  object-fit: cover;
+  flex-shrink: 0;
+  display: block;
+}
+.gd-item-icon, .gd-spell-icon {
+  border-radius: 6px;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: #0c0e16;
+}
+.gd-rune-icon { border-radius: 50%; }
+.gd-item-empty {
+  display: inline-block;
+  border-radius: 6px;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.08);
+  flex-shrink: 0;
+}

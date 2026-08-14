@@ -1,0 +1,142 @@
+import React, { useEffect, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { getSummonerDashboard } from '../services/riotApi';
+import { ChampionIcon } from '../components/GameIcons';
+import { parsePlayerSearch } from '../lib/playerRoute';
+import { MODE_KEYS, MODE_LABEL, MODE_QUEUE } from '../lib/queues';
+import { useSession } from '../state/SessionContext';
+import './Champions.css';
+
+export default function Champions() {
+  const { session } = useSession();
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const qParam = parsePlayerSearch(searchParams);
+  const ownId = session ? `${session.gameName}#${session.tagLine}` : '';
+  const activeId = (qParam || ownId).trim();
+
+  const [profile, setProfile] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [mode, setMode] = useState('Solo');
+  const [sort, setSort] = useState('games');
+
+  const lookup = {
+    region: session?.region || 'europe',
+    platform: session?.platform || 'euw1',
+  };
+
+  const load = async (riotId, selectedMode = mode) => {
+    if (!riotId) {
+      setProfile(null);
+      setError('');
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    setError('');
+    const [gameName, tagLine] = riotId.split('#');
+    try {
+      const data = await getSummonerDashboard({
+        gameName,
+        tagLine: tagLine || session?.tagLine || 'EUW',
+        region: lookup.region,
+        platform: lookup.platform,
+        queue: MODE_QUEUE[selectedMode],
+        count: 40,
+      });
+      setProfile(data);
+    } catch (err) {
+      setError(err?.message || 'Could not load champion stats.');
+      setProfile(null);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    load(activeId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeId, session?.platform, session?.region]);
+
+  const pool = [...(profile?.championPool || [])].sort((a, b) => {
+    if (sort === 'wr') return b.wr - a.wr || b.games - a.games;
+    if (sort === 'kda') return Number(b.kda) - Number(a.kda);
+    if (sort === 'cs') return Number(b.cs) - Number(a.cs);
+    return b.games - a.games;
+  });
+
+  return (
+    <div className="ch-page">
+      <header className="ch-head">
+        <div>
+          <h1>Champions</h1>
+          <p>{activeId ? `${activeId} · last 40 ${MODE_LABEL[mode].toLowerCase()} games` : 'Link an account to see your champion pool.'}</p>
+        </div>
+        <div className="ch-filters">
+          {MODE_KEYS.map((m) => (
+            <button
+              key={m}
+              type="button"
+              className={`ch-chip${m === mode ? ' is-on' : ''}`}
+              onClick={() => { setMode(m); load(activeId, m); }}
+            >
+              {m}
+            </button>
+          ))}
+        </div>
+      </header>
+
+      {!activeId ? (
+        <div className="ch-empty">
+          <span>Link a Riot account to load champion stats.</span>
+          <button type="button" onClick={() => navigate('/link-account')}>Link account</button>
+        </div>
+      ) : error ? (
+        <div className="ch-empty">
+          <span>{error}</span>
+          <button type="button" onClick={() => load(activeId)}>Retry</button>
+        </div>
+      ) : loading || !profile ? (
+        <div className="ch-empty">Loading champion pool…</div>
+      ) : (
+        <div className="ch-table-wrap">
+          <table className="ch-table">
+            <thead>
+              <tr>
+                <th>Champion</th>
+                <th><button type="button" className={sort === 'games' ? 'is-on' : ''} onClick={() => setSort('games')}>Games</button></th>
+                <th><button type="button" className={sort === 'wr' ? 'is-on' : ''} onClick={() => setSort('wr')}>WR</button></th>
+                <th>W–L</th>
+                <th><button type="button" className={sort === 'kda' ? 'is-on' : ''} onClick={() => setSort('kda')}>KDA</button></th>
+                <th><button type="button" className={sort === 'cs' ? 'is-on' : ''} onClick={() => setSort('cs')}>CS/min</button></th>
+              </tr>
+            </thead>
+            <tbody>
+              {pool.map((row) => (
+                <tr key={row.champion}>
+                  <td>
+                    <div className="ch-champ">
+                      <ChampionIcon name={row.champion} size={32} />
+                      <span>{row.champion}</span>
+                    </div>
+                  </td>
+                  <td>{row.games}</td>
+                  <td className={row.wr >= 50 ? 'is-pos' : 'is-neg'}>{row.wr.toFixed(1)}%</td>
+                  <td>{row.wins}–{row.losses}</td>
+                  <td>{row.kda}</td>
+                  <td>{row.cs}</td>
+                </tr>
+              ))}
+              {!pool.length && (
+                <tr>
+                  <td colSpan={6} className="ch-none">No games in this queue yet.</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}

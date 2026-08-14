@@ -1,0 +1,63 @@
+.gd-review-overlay {
+  position: fixed; inset: 0; z-index: 80;
+  background: rgba(6, 6, 12, 0.72);
+  display: grid; place-items: center;
+  padding: 24px;
+}
+.gd-review-modal {
+  position: relative;
+  width: min(560px, 100%);
+  background: #12121b;
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 18px;
+  padding: 22px 22px 18px;
+  box-shadow: 0 24px 64px rgba(0,0,0,0.45);
+  display: flex; flex-direction: column; gap: 16px;
+}
+.gd-review-close {
+  position: absolute; top: 10px; right: 12px;
+  border: none; background: transparent;
+  color: rgba(255,255,255,0.45); font-size: 26px; line-height: 1; cursor: pointer;
+}
+.gd-review-close:hover { color: #fff; }
+.gd-review-banner {
+  font-size: 11px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase;
+  color: #ffd76b;
+}
+.gd-review-kicker {
+  display: flex; flex-wrap: wrap; gap: 8px;
+  font-size: 11px; font-weight: 700; color: var(--gd-text-muted);
+  text-transform: uppercase; letter-spacing: 0.06em;
+}
+.gd-review-result.win { color: #7eb6ff; }
+.gd-review-result.loss { color: #ff5c68; }
+.gd-review-hero { display: flex; align-items: center; gap: 14px; }
+.gd-review-hero h2 { margin: 0; font-size: 22px; font-family: var(--gd-font-display); }
+.gd-review-champ { border-radius: 12px; }
+.gd-review-kda {
+  margin-top: 4px; font-family: var(--gd-font-mono);
+  font-size: 14px; font-weight: 700;
+}
+.gd-review-highlights {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;
+}
+.gd-review-highlights div {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 12px; padding: 10px 12px;
+  display: flex; flex-direction: column; gap: 4px;
+}
+.gd-review-highlights span { font-size: 10px; font-weight: 700; color: var(--gd-text-muted); text-transform: uppercase; letter-spacing: 0.06em; }
+.gd-review-highlights strong { font-size: 16px; font-family: var(--gd-font-mono); }
+.gd-review-highlights .is-pos { color: #3ecf8e; }
+.gd-review-highlights .is-neg { color: #ff5c68; }
+.gd-review-teams { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.gd-review-row { display: flex; gap: 6px; }
+.gd-review-vs {
+  font-size: 11px; font-weight: 800; letter-spacing: 0.08em;
+  color: var(--gd-text-faint);
+}
+.gd-review-build { display: flex; align-items: center; gap: 10px; }
+.gd-review-spells { display: flex; flex-direction: column; gap: 4px; }
+.gd-review-items { display: flex; gap: 4px; flex-wrap: wrap; }
+.gd-review-runes { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }

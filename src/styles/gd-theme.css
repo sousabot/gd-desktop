@@ -1,0 +1,73 @@
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500;600&display=swap');
+
+:root {
+  --gd-bg: #0a0c17;
+  --gd-bg-card: #12152a;
+  --gd-bg-card-hover: #161a35;
+  --gd-border: rgba(124, 92, 255, 0.14);
+  --gd-border-strong: rgba(124, 92, 255, 0.32);
+
+  --gd-violet: #7c5cff;
+  --gd-violet-soft: rgba(124, 92, 255, 0.16);
+  --gd-gold: #ffb454;
+  --gd-gold-soft: rgba(255, 180, 84, 0.14);
+
+  --gd-success: #3ecf8e;
+  --gd-success-soft: rgba(62, 207, 142, 0.14);
+  --gd-danger: #ff5c68;
+  --gd-danger-soft: rgba(255, 92, 104, 0.14);
+
+  --gd-text-primary: #eceefb;
+  --gd-text-muted: #8890b5;
+  --gd-text-faint: #545b7a;
+
+  --gd-font-display: 'Space Grotesk', 'Inter', sans-serif;
+  --gd-font-body: 'Inter', sans-serif;
+  --gd-font-mono: 'JetBrains Mono', monospace;
+
+  --gd-radius-sm: 8px;
+  --gd-radius-md: 14px;
+  --gd-radius-lg: 20px;
+  --gd-ease: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+* { box-sizing: border-box; }
+html, body, #root { height: 100%; }
+
+body {
+  background: var(--gd-bg);
+  background-image:
+    radial-gradient(circle at 15% 0%, rgba(124, 92, 255, 0.10) 0%, transparent 45%),
+    radial-gradient(circle at 85% 20%, rgba(255, 180, 84, 0.06) 0%, transparent 40%);
+  color: var(--gd-text-primary);
+  font-family: var(--gd-font-body);
+  margin: 0;
+}
+
+a { color: inherit; }
+.gd-mono { font-family: var(--gd-font-mono); font-variant-numeric: tabular-nums; }
+.gd-text-muted { color: var(--gd-text-muted); }
+
+.gd-shell {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
+  background: var(--gd-bg);
+}
+.gd-shell__body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+.gd-shell__main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--gd-border-strong); border-radius: 8px; }

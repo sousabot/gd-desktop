@@ -1,0 +1,63 @@
+.ch-page {
+  min-height: 100%;
+  background: #0e1018;
+  color: var(--gd-text-primary);
+  display: flex;
+  flex-direction: column;
+  padding: 18px 22px 28px;
+  box-sizing: border-box;
+}
+.ch-head {
+  display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+.ch-head h1 {
+  margin: 0;
+  font-family: var(--gd-font-display);
+  font-size: 26px; font-weight: 700; letter-spacing: -0.03em;
+}
+.ch-head p { margin: 6px 0 0; font-size: 12px; color: var(--gd-text-muted); }
+.ch-filters { display: flex; gap: 6px; flex-wrap: wrap; }
+.ch-chip {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.08);
+  color: var(--gd-text-muted);
+  border-radius: 999px; padding: 7px 12px;
+  font-size: 12px; font-weight: 700; cursor: pointer;
+}
+.ch-chip.is-on { color: #ffd76b; border-color: rgba(255,215,107,0.4); background: rgba(255,215,107,0.12); }
+.ch-empty {
+  background: #12121b; border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 16px; padding: 28px 22px;
+  display: flex; flex-direction: column; align-items: flex-start; gap: 12px;
+  color: var(--gd-text-muted);
+}
+.ch-empty button {
+  border: 1px solid rgba(255,255,255,0.14);
+  background: rgba(255,255,255,0.06);
+  color: #fff; border-radius: 999px; padding: 7px 14px;
+  font-weight: 700; cursor: pointer;
+}
+.ch-table-wrap {
+  overflow: auto;
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 16px;
+  background: #12121b;
+}
+.ch-table { width: 100%; border-collapse: collapse; }
+.ch-table th, .ch-table td {
+  text-align: left; padding: 12px 14px;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+  font-size: 13px;
+}
+.ch-table th { font-size: 11px; color: var(--gd-text-muted); letter-spacing: 0.04em; text-transform: uppercase; }
+.ch-table th button {
+  background: none; border: none; color: inherit; font: inherit; cursor: pointer; padding: 0;
+}
+.ch-table th button.is-on { color: #ffd76b; }
+.ch-table tbody tr:hover { background: rgba(255,255,255,0.03); }
+.ch-champ { display: flex; align-items: center; gap: 10px; font-weight: 700; }
+.ch-champ img { border-radius: 8px; }
+.is-pos { color: #3ecf8e; font-weight: 700; }
+.is-neg { color: #ff5c68; font-weight: 700; }
+.ch-none { text-align: center !important; color: var(--gd-text-muted); }
