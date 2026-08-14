@@ -34,8 +34,8 @@ export function parseRiotIdInput(nameInput = '', tagInput = '') {
 
 export function linkErrorMessage(err) {
   const msg = String(err?.message || err || '');
-  if (msg.includes('RIOT_API_KEY is not set')) {
-    return 'Riot API key is not set. Add RIOT_API_KEY to .env and restart the app.';
+  if (msg.includes('RIOT_API_KEY is not set') || msg.toLowerCase().includes('gd_api_url')) {
+    return 'Riot connection is not configured. Dev: add RIOT_API_KEY to .env. Shared build: set GD_API_URL to the proxy.';
   }
   if (msg.includes(' 401 ') || msg.includes(' 403 ')) {
     return 'Riot API key is missing or expired. Get a new key at developer.riotgames.com, put it in .env, and restart the app.';

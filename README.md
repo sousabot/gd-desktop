@@ -23,6 +23,19 @@ npm run dist:portable # portable .exe only
 
 Do not put `RIOT_API_KEY` in a public release. A public app needs a backend that holds the key.
 
+## API proxy (for testers / public builds)
+
+The desktop app can call Riot through `server/` so the key never ships in the `.exe`.
+
+1. Deploy the repo as a Render Web Service (`render.yaml`). Set `RIOT_API_KEY` (and `DISCORD_WEBHOOK_URL` if you want in-app feedback).
+2. Put the HTTPS URL in `client.env`:
+
+```
+GD_API_URL=https://your-service.onrender.com
+```
+
+3. `npm run dist:portable` and send that exe. Local `npm run dev` still uses `.env` directly.
+
 ## Setup
 
 ```bash

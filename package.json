@@ -10,8 +10,9 @@
     "build": "vite build",
     "start": "electron .",
     "preview": "vite preview",
-    "dist": "vite build && set CSC_IDENTITY_AUTO_DISCOVERY=false&& electron-builder --win",
-    "dist:portable": "vite build && set CSC_IDENTITY_AUTO_DISCOVERY=false&& electron-builder --win portable"
+    "server": "node server/index.js",
+    "dist": "node server/prepare-client-env.js && vite build && set CSC_IDENTITY_AUTO_DISCOVERY=false&& electron-builder --win",
+    "dist:portable": "node server/prepare-client-env.js && vite build && set CSC_IDENTITY_AUTO_DISCOVERY=false&& electron-builder --win portable"
   },
   "dependencies": {
     "dotenv": "^16.4.5",
@@ -44,13 +45,13 @@
         "to": ".env.example"
       },
       {
-        "from": ".env",
+        "from": "client.env",
         "to": "gd.env"
       }
     ],
     "extraFiles": [
       {
-        "from": ".env",
+        "from": "client.env",
         "to": "gd.env"
       }
     ],

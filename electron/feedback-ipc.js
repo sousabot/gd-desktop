@@ -7,19 +7,34 @@ function clip(value, max) {
 module.exports = function registerFeedbackHandlers(ipcMain) {
   try { ipcMain.removeHandler('app:sendFeedback'); } catch { /* first register */ }
   ipcMain.handle('app:sendFeedback', async (_e, payload = {}) => {
+    const kind = payload.kind === 'feedback' ? 'Feedback' : 'Bug';
+    const title = clip(payload.title, 120);
+    const message = clip(payload.message, 1800);
+    if (!title || !message) {
+      throw new Error('Title and details are required.');
+    }
+
+    const proxy = String(process.env.GD_API_URL || '').trim().replace(/\/$/, '');
+    if (proxy) {
+      const res = await fetch(`${proxy}/v1/feedback`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(process.env.GD_APP_TOKEN ? { Authorization: `Bearer ${process.env.GD_APP_TOKEN}` } : {}),
+        },
+        body: JSON.stringify({ ...payload, kind: payload.kind, title, message }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body.error || `Feedback failed (${res.status})`);
+      return { ok: true };
+    }
+
     const webhook = String(process.env.DISCORD_WEBHOOK_URL || '').trim();
     if (!webhook) {
       throw new Error('Add DISCORD_WEBHOOK_URL to .env, then restart the app.');
     }
     if (!WEBHOOK_RE.test(webhook)) {
       throw new Error('DISCORD_WEBHOOK_URL in .env is not a valid Discord webhook.');
-    }
-
-    const kind = payload.kind === 'feedback' ? 'Feedback' : 'Bug';
-    const title = clip(payload.title, 120);
-    const message = clip(payload.message, 1800);
-    if (!title || !message) {
-      throw new Error('Title and details are required.');
     }
 
     const res = await fetch(webhook, {

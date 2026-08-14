@@ -3,6 +3,7 @@ dist/
 dist-electron/
 release/
 .env
+client.env
 gd.env
 *.log
 .DS_Store

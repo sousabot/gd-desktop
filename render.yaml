@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: gd-desktop-api
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm run server
+    healthCheckPath: /health
+    envVars:
+      - key: RIOT_API_KEY
+        sync: false
+      - key: DISCORD_WEBHOOK_URL
+        sync: false
+      - key: GD_APP_TOKEN
+        sync: false

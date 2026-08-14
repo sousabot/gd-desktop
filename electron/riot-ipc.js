@@ -38,7 +38,7 @@ function applyEnvFile(filePath) {
     if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
       value = value.slice(1, -1);
     }
-    if (key === 'RIOT_API_KEY' || key === 'DISCORD_WEBHOOK_URL' || !process.env[key]) {
+    if (key === 'RIOT_API_KEY' || key === 'DISCORD_WEBHOOK_URL' || key === 'GD_API_URL' || key === 'GD_APP_TOKEN' || !process.env[key]) {
       process.env[key] = value;
     }
   });
@@ -56,12 +56,47 @@ function loadEnv() {
   if (process.env.RIOT_API_KEY) {
     process.env.RIOT_API_KEY = process.env.RIOT_API_KEY.trim();
   }
+  if (process.env.GD_API_URL) {
+    process.env.GD_API_URL = process.env.GD_API_URL.trim().replace(/\/$/, '');
+  }
 }
 
 loadEnv();
 
+function isRiotUrl(raw) {
+  try {
+    const u = new URL(raw);
+    return u.protocol === 'https:' && /^[\w.-]+\.api\.riotgames\.com$/i.test(u.hostname);
+  } catch {
+    return false;
+  }
+}
+
 async function riotFetch(url, attempt = 0) {
-  if (!process.env.RIOT_API_KEY) loadEnv();
+  if (!process.env.RIOT_API_KEY && !process.env.GD_API_URL) loadEnv();
+  if (!isRiotUrl(url)) throw new Error('Riot API 400 Bad Request — blocked URL');
+
+  const proxy = String(process.env.GD_API_URL || '').trim();
+  if (proxy) {
+    const res = await fetch(`${proxy}/v1/riot`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(process.env.GD_APP_TOKEN ? { Authorization: `Bearer ${process.env.GD_APP_TOKEN}` } : {}),
+      },
+      body: JSON.stringify({ url }),
+    });
+    const body = await res.json().catch(() => ({}));
+    if (res.status === 429 && attempt < 2) {
+      await new Promise((r) => setTimeout(r, 1500));
+      return riotFetch(url, attempt + 1);
+    }
+    if (!res.ok) {
+      throw new Error(body.error || `Riot API ${res.status} ${res.statusText} — ${url}`);
+    }
+    return body.data;
+  }
+
   const key = String(process.env.RIOT_API_KEY || '').trim();
   if (!key) throw new Error('RIOT_API_KEY is not set in .env');
 
@@ -163,11 +198,12 @@ async function cachedBulkFetch(cacheModule, prefix, ids, fetchOne, ttlMs = Infin
 }
 
 module.exports = function registerRiotHandlers(ipcMain) {
-  const key = process.env.RIOT_API_KEY;
-  if (!key) {
-    console.warn('[riot-ipc] RIOT_API_KEY is not set — live Riot data will fail until you add it to .env.');
+  if (process.env.GD_API_URL) {
+    console.log(`[riot-ipc] Using API proxy ${process.env.GD_API_URL}`);
+  } else if (process.env.RIOT_API_KEY) {
+    console.log(`[riot-ipc] API key loaded (${process.env.RIOT_API_KEY.slice(0, 8)}…)`);
   } else {
-    console.log(`[riot-ipc] API key loaded (${key.slice(0, 8)}…)`);
+    console.warn('[riot-ipc] No GD_API_URL or RIOT_API_KEY — live Riot data will fail.');
   }
 
   // Riot ID rarely changes — cache the single-lookup version too, since
