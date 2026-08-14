@@ -162,7 +162,7 @@ const server = http.createServer(async (req, res) => {
 
   if (req.method === 'GET' && url.pathname === '/riot.txt') {
     res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' });
-    res.end('b3ba387c-aed8-4287-85ce-0d12bb1d02d2');
+    res.end('ee7b2f2b-2c10-4c44-8dd0-50a5206233c1');
     return;
   }
 
