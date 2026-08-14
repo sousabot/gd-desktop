@@ -13,8 +13,8 @@ the new base and port over anything custom you want to keep.
 
 ## Product site
 
-The public landing page, privacy policy, and terms live in `site/`.
-GitHub Pages deploys that folder to `https://sousabot.github.io/gd-desktop/`.
+The public landing page, privacy policy, and terms live in `docs/`.
+GitHub Pages serves that folder at `https://sousabot.github.io/gd-desktop/`.
 
 ```bash
 npm run dist          # Windows installer + portable
