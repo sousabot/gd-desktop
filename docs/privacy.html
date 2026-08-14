@@ -28,7 +28,7 @@
       <p>We do not ask for your Riot password. We do not sell player data. We do not run ads. We do not build a public database of other players beyond what you search inside your own copy of the app.</p>
 
       <h2>Where data lives</h2>
-      <p>Linked-account settings and short-lived caches are stored on your PC (local app data). Riot match data is requested from Riot’s servers when you open a screen. We do not operate a public website backend that stores your match history yet.</p>
+      <p>Linked-account settings and short-lived caches are stored on your PC (local app data). The Windows app does not embed a Riot API key. League data is requested through our HTTPS API proxy (hosted on Render), which holds the Riot key on the server, rate-limits requests, and only forwards calls to official Riot Games API hosts. We do not store your match history in our own database.</p>
 
       <h2>Third parties</h2>
       <p>League data comes from Riot Games. Champion/item images may load from Riot’s Data Dragon / Community Dragon CDNs. Feedback may be delivered via Discord. Those services have their own policies.</p>
