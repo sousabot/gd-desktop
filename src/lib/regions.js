@@ -38,7 +38,7 @@ export function linkErrorMessage(err) {
     return 'Riot connection is not configured. Dev: add RIOT_API_KEY to .env. Shared build: set GD_API_URL to the proxy.';
   }
   if (msg.includes(' 401 ') || msg.includes(' 403 ')) {
-    return 'Riot API key is missing or expired. Get a new key at developer.riotgames.com, put it in .env, and restart the app.';
+    return 'Riot rejected the request (401/403). The API key on the server may be expired — update RIOT_API_KEY on Render and try again.';
   }
   if (msg.includes(' 429 ')) {
     return 'Riot rate limit hit. Wait about a minute and try again.';

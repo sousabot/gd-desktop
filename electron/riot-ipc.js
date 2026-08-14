@@ -59,6 +59,11 @@ function loadEnv() {
   if (process.env.GD_API_URL) {
     process.env.GD_API_URL = process.env.GD_API_URL.trim().replace(/\/$/, '');
   }
+  // Packaged testers must hit the proxy even if gd.env failed to unpack.
+  if (app.isPackaged && !String(process.env.GD_API_URL || '').trim()) {
+    process.env.GD_API_URL = 'https://gd-desktop.onrender.com';
+    console.log('[riot-ipc] Packaged build: using default API proxy');
+  }
 }
 
 loadEnv();

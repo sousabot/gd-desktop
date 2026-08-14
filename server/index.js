@@ -152,7 +152,11 @@ const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
 
   if (req.method === 'GET' && (url.pathname === '/' || url.pathname === '/health')) {
-    send(res, 200, { ok: true, service: 'gd-desktop-api' });
+    send(res, 200, {
+      ok: true,
+      service: 'gd-desktop-api',
+      riotKeyConfigured: Boolean(String(process.env.RIOT_API_KEY || '').trim()),
+    });
     return;
   }
 
@@ -174,6 +178,7 @@ const server = http.createServer(async (req, res) => {
         return;
       }
       const result = await proxyRiot(body.url);
+      console.log(`[gd-api] POST /v1/riot -> ${result.status}`);
       send(res, result.ok ? 200 : result.status, result.ok
         ? { data: result.data }
         : { error: `Riot API ${result.status} ${result.statusText}`, data: result.data });
@@ -188,6 +193,7 @@ const server = http.createServer(async (req, res) => {
 
     send(res, 404, { error: 'Not found' });
   } catch (err) {
+    console.log(`[gd-api] ${req.method} ${url.pathname} -> ${err.status || 500}`);
     send(res, err.status || 500, { error: err.message || 'Server error' });
   }
 });
