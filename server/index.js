@@ -166,11 +166,19 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (!authorized(req)) {
+    console.log(`[gd-api] ${req.method} ${url.pathname} -> 401 unauthorized`);
     send(res, 401, { error: 'Unauthorized' });
     return;
   }
 
   try {
+    if (req.method === 'GET' && url.pathname === '/v1/status') {
+      const result = await proxyRiot('https://euw1.api.riotgames.com/lol/status/v4/platform-data');
+      console.log(`[gd-api] GET /v1/status -> ${result.status}`);
+      send(res, 200, { ok: result.ok, riotStatus: result.status, riotStatusText: result.statusText });
+      return;
+    }
+
     if (req.method === 'POST' && url.pathname === '/v1/riot') {
       const body = await readJson(req);
       if (!isRiotUrl(body.url)) {
@@ -178,7 +186,7 @@ const server = http.createServer(async (req, res) => {
         return;
       }
       const result = await proxyRiot(body.url);
-      console.log(`[gd-api] POST /v1/riot -> ${result.status}`);
+      console.log(`[gd-api] POST /v1/riot -> ${result.status} ${result.statusText}`);
       send(res, result.ok ? 200 : result.status, result.ok
         ? { data: result.data }
         : { error: `Riot API ${result.status} ${result.statusText}`, data: result.data });
