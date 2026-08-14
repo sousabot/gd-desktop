@@ -160,6 +160,12 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  if (req.method === 'GET' && url.pathname === '/riot.txt') {
+    res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' });
+    res.end('b3ba387c-aed8-4287-85ce-0d12bb1d02d2');
+    return;
+  }
+
   if (rateLimited(clientIp(req))) {
     send(res, 429, { error: 'Rate limit — wait a minute and try again.' });
     return;
