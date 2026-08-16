@@ -61,3 +61,15 @@
 .gd-review-spells { display: flex; flex-direction: column; gap: 4px; }
 .gd-review-items { display: flex; gap: 4px; flex-wrap: wrap; }
 .gd-review-runes { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.gd-review-story {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--gd-text-muted);
+}
+.gd-review-label {
+  font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--gd-text-muted); margin-bottom: 6px;
+}
+.gd-review-path { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; }
+.gd-review-arrow { color: var(--gd-text-faint); font-size: 11px; }

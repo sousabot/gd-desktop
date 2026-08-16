@@ -1,0 +1,92 @@
+const cache = new Map();
+const TTL_MS = 30 * 60 * 1000;
+const ROLE = { Top: 'Top', Jungle: 'Jungle', Mid: 'Mid', ADC: 'Bot', Support: 'Support' };
+
+function esc(value) {
+  return String(value || '').replace(/"/g, '');
+}
+
+function cargoUrl({ champion, role }) {
+  const where = role
+    ? `Champion="${esc(champion)}" AND IngameRole="${esc(role)}" AND DateTime_UTC IS NOT NULL`
+    : `Champion="${esc(champion)}" AND DateTime_UTC IS NOT NULL`;
+  const params = new URLSearchParams({
+    action: 'cargoquery',
+    format: 'json',
+    origin: '*',
+    limit: '8',
+    tables: 'ScoreboardPlayers',
+    fields: 'Link,Team,Champion,IngameRole,DateTime_UTC,Items,KeystoneRune,PrimaryTree,SecondaryTree',
+    where,
+    order_by: 'DateTime_UTC DESC',
+  });
+  return `https://lol.fandom.com/api.php?${params.toString()}`;
+}
+
+function splitList(value, sep) {
+  return String(value || '')
+    .split(sep)
+    .map((part) => part.trim())
+    .filter(Boolean);
+}
+
+function playerName(link) {
+  const raw = String(link || '').trim();
+  const cut = raw.replace(/\s*\(.*\)$/, '').trim();
+  return cut || raw;
+}
+
+function mapRows(payload) {
+  const rows = Array.isArray(payload?.cargoquery) ? payload.cargoquery : [];
+  return rows.map((entry, i) => {
+    const row = entry?.title || {};
+    return {
+      id: `${row.Link || 'p'}-${row.DateTime_UTC || i}`,
+      player: playerName(row.Link),
+      team: row.Team || '',
+      role: row.IngameRole || '',
+      at: row.DateTime_UTC || '',
+      items: splitList(row.Items, ';'),
+      keystone: row.KeystoneRune || '',
+      primary: row.PrimaryTree || '',
+      secondary: row.SecondaryTree || '',
+    };
+  }).filter((row) => row.player);
+}
+
+async function query(champion, role) {
+  const url = cargoUrl({ champion, role });
+  const res = await fetch(url, {
+    headers: {
+      Accept: 'application/json',
+      'User-Agent': 'GDEsportsDesktop/0.1.0 (Leaguepedia cargo; draft probuilds)',
+    },
+  });
+  if (!res.ok) throw new Error(`Leaguepedia ${res.status}`);
+  return mapRows(await res.json());
+}
+
+async function listProbuilds({ champion, role } = {}) {
+  const name = String(champion || '').trim();
+  if (!name) return { ok: true, rows: [] };
+  const wikiRole = ROLE[role] || role || '';
+  const key = `${name}|${wikiRole}`;
+  const hit = cache.get(key);
+  if (hit && Date.now() - hit.at < TTL_MS) return hit.data;
+
+  try {
+    let rows = wikiRole ? await query(name, wikiRole) : [];
+    if (!rows.length) rows = await query(name, '');
+    const data = { ok: true, rows, source: 'Leaguepedia' };
+    cache.set(key, { at: Date.now(), data });
+    return data;
+  } catch (err) {
+    return { ok: false, rows: [], error: err.message || 'Could not load pro builds.' };
+  }
+}
+
+function register(ipcMain) {
+  ipcMain.handle('probuilds:list', (_e, args) => listProbuilds(args || {}));
+}
+
+module.exports = { listProbuilds, register };

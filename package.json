@@ -1,30 +1,46 @@
 {
   "name": "gd-desktop",
-  "version": "0.1.0",
+  "version": "0.1.2",
   "description": "GD Esports desktop app — League stats dashboard",
-  "author": "GD Esports",
+  "author": {
+    "name": "GD Esports"
+  },
+  "productName": "GD Esports",
+  "repository": "https://github.com/sousabot/gd-desktop",
   "main": "electron/main.js",
   "private": true,
+  "overwolf": {
+    "packages": [
+      "overlay"
+    ]
+  },
   "scripts": {
-    "dev": "concurrently -k \"vite\" \"wait-on http://localhost:5173 && electron .\"",
+    "dev": "concurrently -k \"vite\" \"wait-on http://localhost:5173 && node electron/dev-ow.js\"",
     "build": "vite build",
-    "start": "electron .",
+    "start": "ow-electron .",
     "preview": "vite preview",
     "server": "node server/index.js",
-    "dist": "node server/prepare-client-env.js && vite build && set CSC_IDENTITY_AUTO_DISCOVERY=false&& electron-builder --win",
-    "dist:portable": "node server/prepare-client-env.js && vite build && set CSC_IDENTITY_AUTO_DISCOVERY=false&& electron-builder --win portable"
+    "dist": "node server/prepare-client-env.js && vite build && node scripts/electron-build.cjs",
+    "dist:portable": "node server/prepare-client-env.js && vite build && node scripts/electron-build.cjs --portable",
+    "dist:ow": "node server/prepare-client-env.js && vite build && node scripts/electron-build.cjs --portable",
+    "release": "node server/prepare-client-env.js && vite build && node scripts/electron-build.cjs --release"
   },
   "dependencies": {
     "dotenv": "^16.4.5",
+    "electron-updater": "^6.6.2",
+    "ffmpeg-static": "^5.3.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-router-dom": "^6.26.2"
   },
   "devDependencies": {
+    "@overwolf/ow-electron": "latest",
+    "@overwolf/ow-electron-builder": "latest",
     "@vitejs/plugin-react": "^4.3.1",
     "concurrently": "^8.2.2",
     "electron": "^31.3.0",
     "electron-builder": "^25.1.8",
+    "rcedit": "^5.0.2",
     "vite": "^5.4.1",
     "wait-on": "^7.2.0"
   },
@@ -34,10 +50,14 @@
     "directories": {
       "output": "release"
     },
+    "icon": "build/icon.ico",
     "files": [
       "dist/**/*",
       "electron/**/*",
       "package.json"
+    ],
+    "asarUnpack": [
+      "**/node_modules/ffmpeg-static/**"
     ],
     "extraResources": [
       {
@@ -56,16 +76,22 @@
       }
     ],
     "forceCodeSigning": false,
+    "afterPack": "./scripts/after-pack-icon.cjs",
     "win": {
+      "icon": "build/icon.ico",
       "signAndEditExecutable": false,
       "target": [
         {
           "target": "nsis",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         },
         {
           "target": "portable",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         }
       ],
       "artifactName": "${productName}-${version}.${ext}"
@@ -79,6 +105,12 @@
     },
     "portable": {
       "artifactName": "${productName}-${version}-portable.${ext}"
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "sousabot",
+      "repo": "gd-desktop",
+      "releaseType": "release"
     }
   }
 }

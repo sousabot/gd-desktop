@@ -13,6 +13,7 @@ export default function Login() {
         <span className="gd-brand__mark gd-login-mark">GD</span>
         <h1>GD Esports</h1>
         <p className="gd-text-muted">Track your League of Legends stats, matches, and rank progress.</p>
+        <p className="gd-text-muted">Windows may warn that the app is unsigned. Choose More info, then Run anyway.</p>
 
         {session ? (
           <>

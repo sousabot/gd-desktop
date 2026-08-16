@@ -1,6 +1,6 @@
 // Runs in the Electron MAIN process. Persists one JSON file in the app's
 // userData folder so "vs il y a 1w" deltas survive app restarts.
-// Format: { "<riotId>": { timestamp: <ms>, stats: { kda, dpmScore, ... } } }
+// Format: { "<riotId>": { timestamp: <ms>, stats: { kda, gdScore, ... } } }
 
 const fs = require('fs');
 const path = require('path');

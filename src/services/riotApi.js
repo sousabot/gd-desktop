@@ -1,9 +1,18 @@
-import { MOCK_PROFILE, MOCK_TOP_LEAGUE, MOCK_LIVE_GAME } from './mockData';
-import { getDdragonVersion } from './ddragon';
+import { getDdragonVersion, platformLabel } from './ddragon';
+import { noticeFromError, isNotFound } from '../lib/apiNotice';
+import { gdScoreFromParticipant } from '../lib/gdScore';
+import { roleFromChampions } from '../lib/champLane';
 
 const hasBridge = typeof window !== 'undefined' && !!window.riotAPI;
 
 export function isLive() { return hasBridge; }
+
+function requireBridge() {
+  if (hasBridge) return;
+  const err = new Error('GD Esports must run as the desktop app to load live Riot data.');
+  noticeFromError(err);
+  throw err;
+}
 
 // Champion Mastery gives numeric championIds, but champion-splash/icon URLs
 // (and ChampThumb) key off the ddragon name string — resolve that mapping
@@ -31,7 +40,7 @@ function getChampionMeta() {
 const ROLE_LABELS = { TOP: 'Top', JUNGLE: 'Jungle', MIDDLE: 'Mid', BOTTOM: 'ADC', UTILITY: 'Support' };
 
 export async function getSummonerDashboard({ gameName, tagLine, region = 'europe', platform = 'euw1', queue = 420, count = 20 }) {
-  if (!hasBridge) return MOCK_PROFILE;
+  requireBridge();
 
   const matchCount = Math.min(Math.max(Number(count) || 20, 1), 100);
 
@@ -93,6 +102,7 @@ export async function getSummonerDashboard({ gameName, tagLine, region = 'europe
     }
 
     let ranked = [];
+    let rankedUnknown = false;
     if (rankedResult.status === 'fulfilled') {
       ranked = rankedResult.value;
     } else {
@@ -102,7 +112,10 @@ export async function getSummonerDashboard({ gameName, tagLine, region = 'europe
           ranked = await window.riotAPI.getRankedEntries({ summonerId: summoner.id, platform: resolvedPlatform });
         } catch (e2) {
           console.warn('[riotApi] getRankedEntries also failed:', e2.message);
+          rankedUnknown = true;
         }
+      } else {
+        rankedUnknown = true;
       }
     }
 
@@ -123,8 +136,10 @@ export async function getSummonerDashboard({ gameName, tagLine, region = 'europe
 
     return await normalizeDashboard({
       account, summoner, ranked, matches, timelines, ladderRank,
+      rankedUnknown,
       puuid: account.puuid,
       platform: resolvedPlatform,
+      queue,
       collections: {
         played: Array.isArray(masteryResult) ? masteryResult.length : 0,
         total: champMeta.total || 0,
@@ -132,12 +147,81 @@ export async function getSummonerDashboard({ gameName, tagLine, region = 'europe
     });
   } catch (err) {
     console.error('[riotApi] Live fetch failed:', err);
+    noticeFromError(err);
     throw err;
   }
 }
 
+let draftPoolCache = { key: '', at: 0, data: null };
+
+export async function getDraftPool({ gameName, tagLine, region = 'europe', platform = 'euw1' }) {
+  if (!gameName || !tagLine) return { mastery: {}, recent: {} };
+  const cacheKey = `${gameName}#${tagLine}:${platform}:${region}`;
+  if (draftPoolCache.data && draftPoolCache.key === cacheKey && Date.now() - draftPoolCache.at < 30 * 60 * 1000) {
+    return draftPoolCache.data;
+  }
+  if (!hasBridge) {
+    const data = { mastery: {}, recent: {} };
+    draftPoolCache = { key: cacheKey, at: Date.now(), data };
+    return data;
+  }
+
+  const account = await window.riotAPI.getAccountByRiotId({ gameName, tagLine, region });
+  let resolvedRegion = region;
+  let resolvedPlatform = platform;
+  if (window.riotAPI.getLeagueShard) {
+    try {
+      const shard = await window.riotAPI.getLeagueShard({ puuid: account.puuid, region, platform });
+      if (shard?.platform) resolvedPlatform = shard.platform;
+      if (shard?.region) resolvedRegion = shard.region;
+    } catch { /* keep selected server */ }
+  }
+
+  const [masteries, matchIds] = await Promise.all([
+    window.riotAPI.getChampionMasteries
+      ? window.riotAPI.getChampionMasteries({ puuid: account.puuid, platform: resolvedPlatform }).catch(() => [])
+      : Promise.resolve([]),
+    window.riotAPI.getMatchIds({
+      puuid: account.puuid,
+      region: resolvedRegion,
+      count: 20,
+      queue: 420,
+    }).catch(() => []),
+  ]);
+
+  const matches = matchIds?.length
+    ? await window.riotAPI.getMatchesBulk({ matchIds, region: resolvedRegion }).catch(() => [])
+    : [];
+
+  const mastery = {};
+  (Array.isArray(masteries) ? masteries : []).forEach((m) => {
+    const id = Number(m.championId);
+    if (!id) return;
+    mastery[id] = {
+      points: Number(m.championPoints) || 0,
+      level: Number(m.championLevel) || 0,
+    };
+  });
+
+  const recent = {};
+  (Array.isArray(matches) ? matches : []).forEach((match) => {
+    const p = match?.info?.participants?.find((pp) => pp.puuid === account.puuid);
+    if (!p) return;
+    const id = Number(p.championId);
+    if (!id) return;
+    const lane = ROLE_LABELS[p.teamPosition] || ROLE_LABELS[p.lane] || null;
+    if (!recent[id]) recent[id] = { games: 0, roles: {} };
+    recent[id].games += 1;
+    if (lane) recent[id].roles[lane] = (recent[id].roles[lane] || 0) + 1;
+  });
+
+  const data = { mastery, recent };
+  draftPoolCache = { key: cacheKey, at: Date.now(), data };
+  return data;
+}
+
 export async function getLatestMatchReview({ gameName, tagLine, region = 'europe', platform = 'euw1' }) {
-  if (!hasBridge) return MOCK_PROFILE.recentGames?.[0] || null;
+  if (!hasBridge) return null;
   try {
     const account = await window.riotAPI.getAccountByRiotId({ gameName, tagLine, region });
     let resolvedRegion = region;
@@ -166,6 +250,7 @@ export async function getLatestMatchReview({ gameName, tagLine, region = 'europe
     return dash.recentGames?.[0] || null;
   } catch (err) {
     console.warn('[riotApi] Latest match review failed:', err.message);
+    noticeFromError(err);
     return null;
   }
 }
@@ -196,18 +281,30 @@ export async function getActiveGame({ gameName, tagLine, region = 'europe', plat
   }
 }
 
-function soloRank(entries = []) {
-  const solo = entries.find((r) => r.queueType === 'RANKED_SOLO_5x5') || entries[0];
-  if (!solo) return { rank: 'Unranked', lp: null, wins: null, losses: null };
-  const division = solo.rank && !['MASTER', 'GRANDMASTER', 'CHALLENGER'].includes(solo.tier)
-    ? ` ${solo.rank}`
-    : '';
+function soloRank(entries, queue) {
+  if (entries == null) {
+    return { rank: null, rankUnknown: true, lp: null, wins: null, losses: null };
+  }
+  const list = Array.isArray(entries) ? entries : [];
+  const solo = list.find((r) => r.queueType === 'RANKED_SOLO_5x5');
+  const flex = list.find((r) => r.queueType === 'RANKED_FLEX_SR');
+  const pick = queue === 440 ? (flex || solo) : (solo || flex);
+  if (!pick?.tier) return { rank: 'Unranked', rankUnknown: false, lp: null, wins: null, losses: null };
+  const apex = ['MASTER', 'GRANDMASTER', 'CHALLENGER'].includes(String(pick.tier).toUpperCase());
+  const division = !apex && pick.rank ? ` ${pick.rank}` : '';
+  const flexLabel = queue !== 440 && pick === flex && pick !== solo ? ' Flex' : '';
   return {
-    rank: `${solo.tier}${division}`,
-    lp: solo.leaguePoints ?? null,
-    wins: solo.wins ?? null,
-    losses: solo.losses ?? null,
+    rank: `${formatTier(pick.tier)}${division}${flexLabel}`,
+    rankUnknown: false,
+    lp: pick.leaguePoints ?? null,
+    wins: pick.wins ?? null,
+    losses: pick.losses ?? null,
   };
+}
+
+function formatTier(tier) {
+  const t = String(tier || '');
+  return t.charAt(0).toUpperCase() + t.slice(1).toLowerCase();
 }
 
 function streakFromResults(results) {
@@ -265,67 +362,255 @@ async function liveMatchExtras(puuids, championIdByPuuid, region, queue = 420) {
   return extras;
 }
 
+function indexByPuuid(ids, rows) {
+  const map = {};
+  (ids || []).forEach((id, i) => {
+    if (id) map[id] = rows?.[i];
+  });
+  return map;
+}
+
+function parseSpectatorRiotId(p = {}) {
+  const raw = String(p.riotId || '').trim();
+  const hash = raw.lastIndexOf('#');
+  const parsedName = hash > 0 ? raw.slice(0, hash) : '';
+  const parsedTag = hash > 0 ? raw.slice(hash + 1) : '';
+  return {
+    gameName: p.riotIdGameName || parsedName || '',
+    tagLine: p.riotIdTagline || p.riotIdTagLine || parsedTag || '',
+  };
+}
+
+function mapLivePlayers(raw, account, champMeta, accountByPuuid = {}, rankedByPuuid = {}, extras = {}) {
+  return raw.participants.map((p) => {
+    const acc = p.puuid && accountByPuuid[p.puuid];
+    const accOk = acc && (!acc.puuid || acc.puuid === p.puuid);
+    const parsed = parseSpectatorRiotId(p);
+    let name = parsed.gameName || (accOk && acc.gameName) || p.summonerName || 'Unknown';
+    let tag = parsed.tagLine || (accOk && acc.tagLine) || '';
+    const ranked = soloRank(p.puuid ? rankedByPuuid[p.puuid] : null);
+    const extra = extras[p.puuid] || {};
+    const hasSmite = p.spell1Id === 11 || p.spell2Id === 11;
+    const champId = champMeta.map[String(p.championId)] || 'Aatrox';
+    const posRaw = p.teamPosition || p.selectedPosition || p.position;
+    const isSelf = !!(p.puuid && account.puuid && p.puuid === account.puuid);
+    const selfName = String(account.gameName || '').toLowerCase();
+    const selfTag = String(account.tagLine || '').toLowerCase();
+    if (!isSelf && selfName && name.toLowerCase() === selfName && String(tag).toLowerCase() === selfTag) {
+      name = 'Unknown';
+      tag = '';
+    }
+    return {
+      puuid: p.puuid,
+      teamId: p.teamId,
+      champion: champId,
+      championName: champMeta.names?.[champId] || champId,
+      profileIconId: p.profileIconId,
+      spell1Id: p.spell1Id,
+      spell2Id: p.spell2Id,
+      keystone: p.perks?.perkIds?.[0] || null,
+      primaryStyle: p.perks?.perkStyle || null,
+      subStyle: p.perks?.perkSubStyle || null,
+      gameName: name,
+      tagLine: tag,
+      riotId: tag ? `${name}#${tag}` : name,
+      isSelf,
+      role: hasSmite ? 'Jungle' : (ROLE_LABELS[posRaw] || extra.role || null),
+      champGames: extra.champGames || 0,
+      champWins: extra.champWins || 0,
+      champWr: extra.champWr,
+      streak: extra.streak || 0,
+      last3: extra.last3 || [],
+      dodge: !!extra.dodge,
+      ...ranked,
+    };
+  });
+}
+
+const SUPPORT_ITEM_IDS = new Set([
+  3850, 3851, 3853, 3854, 3855, 3857, 3858, 3859, 3860, 3862, 3863, 3864,
+  3865, 3866, 3867, 3868, 3869, 3870, 3871, 3876, 3877,
+]);
+
+function normChamp(name = '') {
+  return String(name).replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+}
+
+function sameRiotId(a, b) {
+  const left = String(a || '').trim().toLowerCase();
+  const right = String(b || '').trim().toLowerCase();
+  return !!left && !!right && left === right;
+}
+
+function mergeLiveRoster(players, roster) {
+  if (!roster?.players?.length) return players;
+  const used = new Set();
+  return players.map((p) => {
+    const team = p.teamId === 100 ? 'ORDER' : 'CHAOS';
+    const want = normChamp(p.championName || p.champion);
+    const selfId = String(p.riotId || (p.tagLine ? `${p.gameName}#${p.tagLine}` : '')).toLowerCase();
+    let idx = roster.players.findIndex((row, i) => {
+      if (used.has(i)) return false;
+      if (row.team && row.team !== team) return false;
+      const rowId = String(row.riotId || (row.tagLine ? `${row.gameName}#${row.tagLine}` : '')).toLowerCase();
+      return !!(selfId && rowId && sameRiotId(selfId, rowId));
+    });
+    if (idx < 0) {
+      idx = roster.players.findIndex((row, i) => {
+        if (used.has(i)) return false;
+        if (row.team && row.team !== team) return false;
+        return normChamp(row.champion) === want;
+      });
+    }
+    if (idx < 0) return p;
+    used.add(idx);
+    const row = roster.players[idx];
+    const supportItem = (row.items || []).some((id) => SUPPORT_ITEM_IDS.has(id) || (id >= 3850 && id <= 3877));
+    const fromId = parseSpectatorRiotId({ riotId: row.riotId, riotIdGameName: row.gameName, riotIdTagLine: row.tagLine });
+    const gameName = fromId.gameName || p.gameName;
+    const tagLine = fromId.tagLine || p.tagLine;
+    const riotId = (gameName && tagLine) ? `${gameName}#${tagLine}` : (row.riotId || p.riotId);
+    const pos = String(row.position || '').toUpperCase();
+    return {
+      ...p,
+      gameName,
+      tagLine,
+      riotId,
+      cs: row.cs,
+      items: row.items || [],
+      role: p.role === 'Jungle' ? 'Jungle' : (supportItem ? 'Support' : (ROLE_LABELS[pos] || p.role)),
+    };
+  });
+}
+
+async function getLiveRosterSafe() {
+  try {
+    if (typeof window !== 'undefined' && window.liveClient?.getRoster) {
+      return await window.liveClient.getRoster();
+    }
+  } catch {
+    /* live client is only up while League is running */
+  }
+  return null;
+}
+
+function rosterIncludes(roster, account) {
+  if (!roster?.players?.length || !account) return false;
+  const want = `${account.gameName || ''}#${account.tagLine || ''}`.toLowerCase();
+  const wantName = String(account.gameName || '').toLowerCase();
+  return roster.players.some((p) => {
+    const id = String(p.riotId || `${p.gameName || ''}#${p.tagLine || ''}`).toLowerCase();
+    if (want.includes('#') && id === want) return true;
+    if (p.isYou && wantName && String(p.gameName || '').toLowerCase() === wantName) return true;
+    return false;
+  });
+}
+
+function liveGameFromRoster(roster, account, champMeta) {
+  const nameToKey = {};
+  Object.entries(champMeta?.names || {}).forEach(([key, name]) => {
+    nameToKey[normChamp(name)] = key;
+    nameToKey[normChamp(key)] = key;
+  });
+  const players = (roster.players || []).map((p) => {
+    const key = nameToKey[normChamp(p.champion)] || p.champion || 'Unknown';
+    const teamId = String(p.team || '').toUpperCase() === 'CHAOS' ? 200 : 100;
+    const pos = String(p.position || '').toUpperCase();
+    return {
+      puuid: '',
+      teamId,
+      champion: key,
+      championName: p.champion || key,
+      spell1Id: null,
+      spell2Id: null,
+      keystone: null,
+      gameName: p.gameName || '',
+      tagLine: p.tagLine || '',
+      riotId: p.riotId || (p.tagLine ? `${p.gameName}#${p.tagLine}` : (p.gameName || '')),
+      isSelf: !!p.isYou,
+      role: ROLE_LABELS[pos] || null,
+      items: p.items || [],
+      cs: p.cs,
+    };
+  });
+  return {
+    gameId: 'live-client',
+    queueId: 0,
+    queueName: 'Live game',
+    gameLength: Math.floor(Number(roster.gameTime) || 0),
+    bans: [],
+    blue: players.filter((p) => p.teamId === 100),
+    red: players.filter((p) => p.teamId === 200),
+    source: 'live-client',
+  };
+}
+function withTimeout(promise, ms, fallback) {
+  return Promise.race([
+    promise,
+    new Promise((resolve) => setTimeout(() => resolve(fallback), ms)),
+  ]);
+}
+
 export async function getLiveGame({ gameName, tagLine, region = 'europe', platform = 'euw1' }) {
-  if (!hasBridge) return MOCK_LIVE_GAME;
+  if (!hasBridge) return null;
   try {
     const account = await window.riotAPI.getAccountByRiotId({ gameName, tagLine, region });
+    let resolvedPlatform = platform;
+    let resolvedRegion = region;
+    if (window.riotAPI.getLeagueShard) {
+      try {
+        const shard = await window.riotAPI.getLeagueShard({
+          puuid: account.puuid,
+          region,
+          platform,
+        });
+        if (shard?.platform) resolvedPlatform = shard.platform;
+        if (shard?.region) resolvedRegion = shard.region;
+      } catch { /* keep selected server */ }
+    }
     let raw;
     try {
-      raw = await window.riotAPI.getActiveGame({ puuid: account.puuid, platform });
-    } catch {
+      raw = await window.riotAPI.getActiveGame({ puuid: account.puuid, platform: resolvedPlatform });
+    } catch (err) {
+      if (!isNotFound(err)) {
+        noticeFromError(err);
+        return null;
+      }
+      const champMeta = await getChampionMeta();
+      const roster = await getLiveRosterSafe();
+      if (rosterIncludes(roster, account)) {
+        return liveGameFromRoster(roster, account, champMeta);
+      }
       return null;
     }
     if (!raw?.participants?.length) return null;
 
+    const champMeta = await getChampionMeta();
     const puuids = raw.participants.map((p) => p.puuid).filter(Boolean);
-    const histQueue = [420, 440].includes(raw.gameQueueConfigId) ? raw.gameQueueConfigId : 420;
-    const champIdByPuuid = {};
-    raw.participants.forEach((p) => { if (p.puuid) champIdByPuuid[p.puuid] = p.championId; });
 
-    const [champMeta, accounts, rankedLists, extras] = await Promise.all([
-      getChampionMeta(),
-      window.riotAPI.getAccountsByPuuidsBulk({ puuids, region }).catch(() => []),
+    const [rankedLists, accounts, roster] = await Promise.all([
       window.riotAPI.getRankedByPuuidsBulk
-        ? window.riotAPI.getRankedByPuuidsBulk({ puuids, platform }).catch(() => [])
+        ? window.riotAPI.getRankedByPuuidsBulk({ puuids, platform: resolvedPlatform }).catch(() => puuids.map(() => null))
         : Promise.all(puuids.map((puuid) =>
-          window.riotAPI.getRankedByPuuid({ puuid, platform }).catch(() => [])
+          window.riotAPI.getRankedByPuuid({ puuid, platform: resolvedPlatform }).catch(() => null)
         )),
-      liveMatchExtras(puuids, champIdByPuuid, region, histQueue).catch(() => ({})),
+      window.riotAPI.getAccountsByPuuidsBulk
+        ? window.riotAPI.getAccountsByPuuidsBulk({ puuids, region: resolvedRegion }).catch(() => [])
+        : Promise.resolve([]),
+      getLiveRosterSafe(),
     ]);
 
-    const players = raw.participants.map((p, i) => {
-      const acc = accounts[i];
-      const name = p.riotIdGameName || acc?.gameName || p.summonerName || 'Unknown';
-      const tag = p.riotIdTagline || acc?.tagLine || '';
-      const ranked = soloRank(rankedLists[i] || []);
-      const extra = extras[p.puuid] || {};
-      const hasSmite = p.spell1Id === 11 || p.spell2Id === 11;
-      const champId = champMeta.map[String(p.championId)] || 'Aatrox';
-      return {
-        puuid: p.puuid,
-        teamId: p.teamId,
-        champion: champId,
-        championName: champMeta.names?.[champId] || champId,
-        profileIconId: p.profileIconId,
-        spell1Id: p.spell1Id,
-        spell2Id: p.spell2Id,
-        keystone: p.perks?.perkIds?.[0] || null,
-        primaryStyle: p.perks?.perkStyle || null,
-        subStyle: p.perks?.perkSubStyle || null,
-        gameName: name,
-        tagLine: tag,
-        riotId: tag ? `${name}#${tag}` : name,
-        isSelf: p.puuid === account.puuid,
-        role: hasSmite ? 'Jungle' : extra.role || null,
-        champGames: extra.champGames || 0,
-        champWins: extra.champWins || 0,
-        champWr: extra.champWr,
-        streak: extra.streak || 0,
-        last3: extra.last3 || [],
-        dodge: !!extra.dodge,
-        ...ranked,
-      };
-    });
+    const players = mergeLiveRoster(
+      mapLivePlayers(
+        raw,
+        account,
+        champMeta,
+        indexByPuuid(puuids, accounts),
+        indexByPuuid(puuids, rankedLists),
+        {},
+      ),
+      roster,
+    );
 
     return {
       gameId: raw.gameId,
@@ -340,16 +625,25 @@ export async function getLiveGame({ gameName, tagLine, region = 'europe', platfo
       red: players.filter((p) => p.teamId === 200),
     };
   } catch (err) {
-    console.warn('[riotApi] Live game enrich failed:', err.message);
+    console.warn('[riotApi] Live game failed:', err.message);
+    if (isNotFound(err)) throw err;
+    noticeFromError(err);
     return null;
   }
 }
 
 const NAME_ICON_LIMIT = 50; // names + profile icons for the full table
-const MATCH_LIMIT = 20;     // role / KDA / most-played champs need match fetches
+const MATCH_LIMIT = 24;     // ranked games for KDA / confirmed role
+const GAMES_PER_PLAYER = 4;
 
-export async function getTopLeague({ tier = 'challenger', queue = 'RANKED_SOLO_5x5', platform = 'euw1', region = 'europe' }) {
-  if (!hasBridge) return MOCK_TOP_LEAGUE;
+export async function getTopLeague({
+  tier = 'challenger',
+  queue = 'RANKED_SOLO_5x5',
+  platform = 'euw1',
+  region = 'europe',
+  onPartial,
+} = {}) {
+  requireBridge();
   try {
     const data = await window.riotAPI.getTopLeague({ tier, queue, platform });
     const top = data.entries
@@ -359,26 +653,66 @@ export async function getTopLeague({ tier = 'challenger', queue = 'RANKED_SOLO_5
     const iconPuuids = top.map((e) => e.puuid);
     const matchPuuids = top.slice(0, MATCH_LIMIT).map((e) => e.puuid);
 
-    const GAMES_PER_PLAYER = 6;
-    const [accounts, summoners, recentMatchIdLists, masteries, ddVersion, champMeta] = await Promise.all([
+    const [accounts, masteries, champMeta, ddVersion] = await Promise.all([
       window.riotAPI.getAccountsByPuuidsBulk({ puuids: iconPuuids, region }).catch((e) => {
         console.warn('[riotApi] Leaderboard name resolution failed, falling back to masked IDs:', e.message);
-        return [];
-      }),
-      window.riotAPI.getSummonersByPuuidsBulk({ puuids: iconPuuids, platform }).catch((e) => {
-        console.warn('[riotApi] Leaderboard icon resolution failed:', e.message);
-        return [];
-      }),
-      window.riotAPI.getLastMatchIdsBulk({ puuids: matchPuuids, region, count: 10 }).catch((e) => {
-        console.warn('[riotApi] Leaderboard match history failed:', e.message);
         return [];
       }),
       window.riotAPI.getChampionMasteryBulk({ puuids: matchPuuids, platform }).catch((e) => {
         console.warn('[riotApi] Leaderboard mastery fallback failed:', e.message);
         return [];
       }),
-      getDdragonVersion(),
       getChampionMeta(),
+      getDdragonVersion(),
+    ]);
+
+    const basic = top.map((e, i) => {
+      const acc = accounts[i];
+      const names = i < matchPuuids.length
+        ? (masteries[i] || []).map((mm) => champMeta.map[String(mm.championId)]).filter(Boolean)
+        : [];
+      return {
+        rank: i + 1,
+        puuid: e.puuid,
+        summonerName: acc ? `${acc.gameName}#${acc.tagLine}` : (e.puuid?.slice(0, 8) ?? 'Unknown'),
+        profileIconId: null,
+        profileIconUrl: null,
+        role: roleFromChampions(names),
+        kda: null,
+        topChampions: names.slice(0, 4),
+        lp: e.leaguePoints,
+        wins: e.wins,
+        losses: e.losses,
+      };
+    });
+    onPartial?.(basic);
+
+    const summoners = await window.riotAPI.getSummonersByPuuidsBulk({ puuids: iconPuuids, platform }).catch((e) => {
+      console.warn('[riotApi] Leaderboard icon resolution failed:', e.message);
+      return [];
+    });
+    const withIcons = basic.map((row, i) => {
+      const summ = summoners[i];
+      return {
+        ...row,
+        profileIconId: summ?.profileIconId ?? null,
+        profileIconUrl: summ?.profileIconId != null
+          ? `https://ddragon.leagueoflegends.com/cdn/${ddVersion}/img/profileicon/${summ.profileIconId}.png`
+          : null,
+      };
+    });
+    onPartial?.(withIcons);
+
+    const [recentMatchIdLists] = await Promise.all([
+      window.riotAPI.getLastMatchIdsBulk({
+        puuids: matchPuuids,
+        region,
+        queue: 420,
+        count: GAMES_PER_PLAYER,
+      }).catch((e) => {
+        console.warn('[riotApi] Leaderboard match history failed:', e.message);
+        return [];
+      }),
     ]);
 
     const idsByPlayer = matchPuuids.map((_, i) => {
@@ -399,69 +733,65 @@ export async function getTopLeague({ tier = 'challenger', queue = 'RANKED_SOLO_5
     });
 
     const matchById = {};
-    const CHUNK = 10;
+    const CHUNK = 8;
     for (let i = 0; i < uniqueMatchIds.length; i += CHUNK) {
       const chunk = uniqueMatchIds.slice(i, i + CHUNK);
       const batch = await window.riotAPI.getMatchesBulk({ matchIds: chunk, region }).catch(() => []);
       (batch || []).forEach((m) => { if (m?.metadata?.matchId) matchById[m.metadata.matchId] = m; });
+      if (i + CHUNK < uniqueMatchIds.length) {
+        onPartial?.(mergeMatchStats(withIcons, top, idsByPlayer, matchById, matchPuuids));
+      }
     }
 
-    return top.map((e, i) => {
-      const acc = accounts[i];
-      const summ = summoners[i];
-      const ids = idsByPlayer[i] || [];
-      const champCounts = {};
-      const roleCounts = {};
-      let kills = 0, deaths = 0, assists = 0, games = 0;
-
-      ids.forEach((id) => {
-        const match = matchById[id];
-        const self = match?.info.participants.find((pp) => pp.puuid === e.puuid);
-        if (!self) return;
-        games += 1;
-        champCounts[self.championName] = (champCounts[self.championName] || 0) + 1;
-        if (self.teamPosition) {
-          roleCounts[self.teamPosition] = (roleCounts[self.teamPosition] || 0) + 1;
-        }
-        kills += self.kills;
-        deaths += self.deaths;
-        assists += self.assists;
-      });
-
-      let topChampions = Object.entries(champCounts)
-        .sort((a, b) => b[1] - a[1])
-        .map(([name]) => name)
-        .slice(0, 4);
-
-      if (!topChampions.length) {
-        topChampions = (masteries[i] || [])
-          .map((mm) => champMeta.map[String(mm.championId)])
-          .filter(Boolean)
-          .slice(0, 4);
-      }
-
-      const topRole = Object.entries(roleCounts).sort((a, b) => b[1] - a[1])[0]?.[0];
-      const kda = games ? ((kills + assists) / Math.max(1, deaths)).toFixed(1) : null;
-
-      return {
-        rank: i + 1,
-        summonerName: acc ? `${acc.gameName}#${acc.tagLine}` : (e.puuid?.slice(0, 8) ?? 'Unknown'),
-        profileIconId: summ?.profileIconId ?? null,
-        profileIconUrl: summ?.profileIconId != null
-          ? `https://ddragon.leagueoflegends.com/cdn/${ddVersion}/img/profileicon/${summ.profileIconId}.png`
-          : null,
-        role: topRole ? (ROLE_LABELS[topRole] || null) : null,
-        kda,
-        topChampions,
-        lp: e.leaguePoints,
-        wins: e.wins,
-        losses: e.losses,
-      };
-    });
+    return mergeMatchStats(withIcons, top, idsByPlayer, matchById, matchPuuids);
   } catch (err) {
-    console.error('[riotApi] Leaderboard fetch failed, falling back to mock:', err);
-    return MOCK_TOP_LEAGUE;
+    console.error('[riotApi] Leaderboard failed:', err);
+    noticeFromError(err);
+    throw err;
   }
+}
+
+function mergeMatchStats(rows, top, idsByPlayer, matchById, matchPuuids) {
+  const indexByPuuid = {};
+  matchPuuids.forEach((id, i) => { indexByPuuid[id] = i; });
+
+  return rows.map((row) => {
+    const slot = indexByPuuid[row.puuid];
+    if (slot == null) return row;
+    const e = top[slot];
+    const ids = idsByPlayer[slot] || [];
+    const champCounts = {};
+    const roleCounts = {};
+    let kills = 0, deaths = 0, assists = 0, games = 0;
+
+    ids.forEach((id) => {
+      const match = matchById[id];
+      const self = match?.info?.participants?.find((pp) => pp.puuid === e.puuid);
+      if (!self) return;
+      games += 1;
+      kills += Number(self.kills) || 0;
+      deaths += Number(self.deaths) || 0;
+      assists += Number(self.assists) || 0;
+      champCounts[self.championName] = (champCounts[self.championName] || 0) + 1;
+      const pos = self.teamPosition || self.individualPosition;
+      if (pos && ROLE_LABELS[pos]) roleCounts[pos] = (roleCounts[pos] || 0) + 1;
+    });
+
+    const recentChamps = Object.entries(champCounts)
+      .sort((a, b) => b[1] - a[1])
+      .map(([name]) => name)
+      .slice(0, 4);
+    const topRoleKey = Object.entries(roleCounts).sort((a, b) => b[1] - a[1])[0]?.[0];
+    const matchRole = topRoleKey ? ROLE_LABELS[topRoleKey] : null;
+    const champRole = roleFromChampions(recentChamps.length ? recentChamps : row.topChampions);
+
+    return {
+      ...row,
+      role: matchRole || champRole || row.role,
+      kda: games ? ((kills + assists) / Math.max(1, deaths)).toFixed(1) : row.kda,
+      topChampions: recentChamps.length ? recentChamps : row.topChampions,
+    };
+  });
 }
 
 const FIFTEEN_MIN_MS = 15 * 60 * 1000;
@@ -475,6 +805,21 @@ const QUEUE_NAMES = {
   480: 'Swiftplay',
   700: 'Clash',
 };
+
+const SKIP_ITEMS = new Set([0, 2003, 2010, 2031, 2033, 2052, 2138, 2139, 2140]);
+
+function itemPurchasePath(timeline, participantId) {
+  if (!timeline?.info?.frames?.length) return [];
+  const ids = [];
+  for (const frame of timeline.info.frames) {
+    for (const ev of frame.events || []) {
+      if (ev.type !== 'ITEM_PURCHASED' || ev.participantId !== participantId) continue;
+      if (!ev.itemId || SKIP_ITEMS.has(ev.itemId)) continue;
+      ids.push(ev.itemId);
+    }
+  }
+  return ids.slice(0, 10);
+}
 
 // Gold Diff @15 and K+A Diff @15 are computed against the opposing player in the
 // same role (teamPosition), using the match timeline (match-v5 has no @15 snapshot).
@@ -554,8 +899,8 @@ function computePhaseScores(timeline, match, self) {
 }
 
 const ONE_WEEK_MS = 7 * 24 * 60 * 60 * 1000;
-const DELTA_STAT_KEYS = ['kda', 'dpmScore', 'kp', 'csm', 'visionScore', 'gpm', 'goldDiff15', 'kaDiff15'];
-const DELTA_DECIMALS  = { kda: 1, dpmScore: 1, kp: 2, csm: 1, visionScore: 1, gpm: 0, goldDiff15: 0, kaDiff15: 0 };
+const DELTA_STAT_KEYS = ['kda', 'gdScore', 'kp', 'csm', 'visionScore', 'gpm', 'goldDiff15', 'kaDiff15'];
+const DELTA_DECIMALS  = { kda: 1, gdScore: 1, kp: 2, csm: 1, visionScore: 1, gpm: 0, goldDiff15: 0, kaDiff15: 0 };
 
 function flatDeltas() {
   const out = {};
@@ -602,13 +947,17 @@ async function computeWeeklyDeltas(riotId, currentStats) {
 
 async function normalizeDashboard({
   account, summoner, ranked, matches, timelines = [], ladderRank = null, puuid,
-  platform = 'euw1', collections = { played: 0, total: 0 }, skipDeltas = false,
+  rankedUnknown = false,
+  platform = 'euw1', queue = 420, collections = { played: 0, total: 0 }, skipDeltas = false,
 }) {
-  const solo = ranked.find((r) => r.queueType === 'RANKED_SOLO_5x5');
-  const region = ({ euw1: 'EUW', na1: 'NA', kr: 'KR' })[platform] || 'EUW';
+  const rankedList = Array.isArray(ranked) ? ranked : [];
+  const rankedInfo = rankedUnknown
+    ? { rank: 'Unavailable', lp: null, wins: null, losses: null }
+    : soloRank(rankedList, queue);
+  const region = platformLabel(platform);
 
-  const recentGames = matches.map((m, idx) => {
-    const p = m.info.participants.find((pp) => pp.puuid === puuid);
+  const recentGames = (Array.isArray(matches) ? matches : []).map((m, idx) => {
+    const p = m?.info?.participants?.find((pp) => pp.puuid === puuid);
     if (!p) return null;
     const mins = Math.max(1, m.info.gameDuration / 60);
     const kda = ((p.kills + p.assists) / Math.max(1, p.deaths)).toFixed(1);
@@ -631,6 +980,13 @@ async function normalizeDashboard({
     const primaryPerks = (primary?.selections || []).map((s) => s.perk);
     const subPerks = (sub?.selections || []).map((s) => s.perk);
 
+    const teamDamage = m.info.participants
+      .filter((pp) => pp.teamId === p.teamId)
+      .reduce((sum, pp) => sum + (pp.totalDamageDealtToChampions || 0), 0);
+    const damage = p.totalDamageDealtToChampions || 0;
+    const damageShare = teamDamage ? damage / teamDamage : null;
+    const gdScore = gdScoreFromParticipant(p, m);
+
     return {
       matchId:      m.metadata.matchId,
       win:          p.win,
@@ -643,7 +999,10 @@ async function normalizeDashboard({
       durationSec:  Math.round(m.info.gameDuration % 60),
       kda,
       ago:          timeAgo(m.info.gameEndTimestamp),
-      lp:           Math.min(99, Math.round((p.kills + p.assists) * 3)),
+      gdScore,
+      lp:           gdScore,
+      role:         ROLE_LABELS[p.teamPosition] || ROLE_LABELS[p.individualPosition] || null,
+      queueId:      m.info.queueId,
       queueLabel:   QUEUE_NAMES[m.info.queueId] || 'Other',
       queueType:    QUEUE_NAMES[m.info.queueId] || 'Other',
       region,
@@ -653,6 +1012,9 @@ async function normalizeDashboard({
       kp:           teamKills > 0 ? (p.kills + p.assists) / teamKills : 0,
       goldDiff15,
       kaDiff15,
+      damage,
+      damageShare,
+      buildPath:    itemPurchasePath(timelines[idx], p.participantId),
       earlyScore:   phases.early,
       midScore:     phases.mid,
       lateScore:    phases.late,
@@ -675,7 +1037,7 @@ async function normalizeDashboard({
   const avg = (arr) => (arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : 0);
   const kdaVal   = avg(recentGames.map((g) => (g.kills + g.assists) / Math.max(1, g.deaths)));
   const csPerMin = avg(recentGames.map((g) => g.cs / Math.max(1, g.durationMin)));
-  const dpmVal    = avg(recentGames.map((g) => g.dpm));
+  const gdScoreVal = avg(recentGames.map((g) => g.gdScore));
   const gpmVal    = avg(recentGames.map((g) => g.gpm));
   const visionVal = avg(recentGames.map((g) => g.visionPerMin));
   const kpVal     = avg(recentGames.map((g) => g.kp));
@@ -723,23 +1085,25 @@ async function normalizeDashboard({
 
   const riotId = `${account.gameName}#${account.tagLine}`;
   const deltas = skipDeltas ? flatDeltas() : await computeWeeklyDeltas(riotId, {
-    kda: kdaVal, dpmScore: dpmVal, kp: kpVal, csm: csPerMin,
+    kda: kdaVal, gdScore: gdScoreVal, kp: kpVal, csm: csPerMin,
     visionScore: visionVal, gpm: gpmVal, goldDiff15: gd15Val, kaDiff15: ka15Val,
   });
 
   return {
     riotId,
+    platform,
+    region,
     profileIconId: summoner?.profileIconId ?? 29,
     summonerLevel: summoner?.summonerLevel ?? null,
-    rank:          solo ? `${solo.tier}` : 'Unranked',
+    rank:          rankedInfo.rank,
     ladderRank,
-    lp:            solo?.leaguePoints ?? 0,
-    wins:          solo?.wins ?? 0,
-    losses:        solo?.losses ?? 0,
+    lp:            rankedInfo.lp,
+    wins:          rankedInfo.wins,
+    losses:        rankedInfo.losses,
     stats: {
       kda:               kdaVal.toFixed(1),
       kdaDelta:          deltas.kda.delta, kdaDeltaDir: deltas.kda.dir,
-      dpmScore:          dpmVal.toFixed(1), dpmDelta: deltas.dpmScore.delta, dpmDeltaDir: deltas.dpmScore.dir,
+      gdScore:           gdScoreVal.toFixed(1), gdDelta: deltas.gdScore.delta, gdDeltaDir: deltas.gdScore.dir,
       kp:                kpVal.toFixed(2),  kpDelta:  deltas.kp.delta,  kpDeltaDir:  deltas.kp.dir,
       csm:               csPerMin.toFixed(1),
       csmDelta:          deltas.csm.delta, csmDeltaDir: deltas.csm.dir,
@@ -750,7 +1114,7 @@ async function normalizeDashboard({
     },
     sparklines: {
       kda:        recentGames.map((g) => (g.kills + g.assists) / Math.max(1, g.deaths)),
-      dpmScore:   recentGames.map((g) => g.dpm),
+      gdScore:    recentGames.map((g) => g.gdScore),
       kp:         recentGames.map((g) => g.kp),
       csm:        recentGames.map((g) => g.cs / Math.max(1, g.durationMin)),
       vision:     recentGames.map((g) => g.visionPerMin),
@@ -779,4 +1143,17 @@ function timeAgo(ts) {
   const hrs = Math.floor(mins / 60);
   if (hrs < 24) return `${hrs}h ago`;
   return `${Math.floor(hrs / 24)}d ago`;
+}
+
+export async function getChampionTierList({ platform = 'euw1', rank = 'challenger', force = false } = {}) {
+  requireBridge();
+  if (!window.riotAPI.getTierList) {
+    throw new Error('Tier list is not available in this build.');
+  }
+  try {
+    return await window.riotAPI.getTierList({ platform, rank, force });
+  } catch (err) {
+    noticeFromError(err);
+    throw err;
+  }
 }

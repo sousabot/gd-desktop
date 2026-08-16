@@ -2,10 +2,11 @@
 // Desktop builds call this instead of talking to Riot with a key in the .exe.
 //
 // Local:  npm run server
-// Host:   Render / Railway / Fly — set RIOT_API_KEY (and optional DISCORD_WEBHOOK_URL, GD_APP_TOKEN)
+// Host:   Render / Railway / Fly — set RIOT_API_KEY, GD_APP_TOKEN, and optional DISCORD_WEBHOOK_URL
 
 const http = require('http');
 const path = require('path');
+const crypto = require('crypto');
 const { URL } = require('url');
 
 require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
@@ -13,7 +14,7 @@ require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 const PORT = Number(process.env.PORT) || 8787;
 const TOKEN = String(process.env.GD_APP_TOKEN || '').trim();
 const WINDOW_MS = 60 * 1000;
-const MAX_PER_WINDOW = 80;
+const MAX_PER_WINDOW = 200;
 const hits = new Map();
 
 function clip(value, max) {
@@ -80,10 +81,23 @@ function send(res, status, body) {
   res.end(json);
 }
 
+function isLocalClient(req) {
+  const ip = clientIp(req);
+  return ip === '127.0.0.1' || ip === '::1' || ip === '::ffff:127.0.0.1' || ip === 'localhost';
+}
+
 function authorized(req) {
-  if (!TOKEN) return true;
+  if (!TOKEN) return isLocalClient(req);
   const header = String(req.headers.authorization || '');
-  return header === `Bearer ${TOKEN}`;
+  const want = `Bearer ${TOKEN}`;
+  const a = Buffer.from(header);
+  const b = Buffer.from(want);
+  if (a.length !== b.length) return false;
+  try {
+    return crypto.timingSafeEqual(a, b);
+  } catch {
+    return false;
+  }
 }
 
 async function proxyRiot(url) {
@@ -99,6 +113,18 @@ async function proxyRiot(url) {
   try { data = JSON.parse(text); } catch { /* keep text */ }
   return { status: res.status, ok: res.ok, statusText: res.statusText, data };
 }
+
+async function serverRiotFetch(url) {
+  const result = await proxyRiot(url);
+  if (!result.ok) {
+    const err = new Error(`Riot API ${result.status} ${result.statusText}`);
+    err.status = result.status;
+    throw err;
+  }
+  return result.data;
+}
+
+const spectateFeed = require('../electron/spectate-feed').createScanner({ riotFetch: serverRiotFetch });
 
 async function postDiscord(payload) {
   const webhook = String(process.env.DISCORD_WEBHOOK_URL || '').trim();
@@ -152,11 +178,7 @@ const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
 
   if (req.method === 'GET' && (url.pathname === '/' || url.pathname === '/health')) {
-    send(res, 200, {
-      ok: true,
-      service: 'gd-desktop-api',
-      riotKeyConfigured: Boolean(String(process.env.RIOT_API_KEY || '').trim()),
-    });
+    send(res, 200, { ok: true, service: 'gd-desktop-api' });
     return;
   }
 
@@ -167,7 +189,7 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (rateLimited(clientIp(req))) {
-    send(res, 429, { error: 'Rate limit — wait a minute and try again.' });
+    send(res, 429, { error: 'Rate limit — wait 2 minutes and try again.' });
     return;
   }
 
@@ -182,6 +204,19 @@ const server = http.createServer(async (req, res) => {
       const result = await proxyRiot('https://euw1.api.riotgames.com/lol/status/v4/platform-data');
       console.log(`[gd-api] GET /v1/status -> ${result.status}`);
       send(res, 200, { ok: result.ok, riotStatus: result.status, riotStatusText: result.statusText });
+      return;
+    }
+
+    if (req.method === 'GET' && url.pathname === '/v1/spectate') {
+      const platforms = spectateFeed.pickPlatforms(
+        url.searchParams.get('platforms') || url.searchParams.get('platform') || '',
+      );
+      const snap = spectateFeed.snapshot(platforms, { keys: true });
+      const stale = !snap.updatedAt || Date.now() - snap.updatedAt > 75000;
+      if (stale) spectateFeed.refresh(platforms).catch((err) => {
+        console.log(`[gd-api] spectate refresh failed: ${err.message || err}`);
+      });
+      send(res, 200, { ...snap, scanning: stale || snap.scanning });
       return;
     }
 
@@ -215,4 +250,10 @@ const server = http.createServer(async (req, res) => {
 server.listen(PORT, () => {
   console.log(`[gd-api] listening on :${PORT}`);
   if (!process.env.RIOT_API_KEY) console.warn('[gd-api] RIOT_API_KEY is not set');
+  if (!TOKEN) {
+    console.warn('[gd-api] GD_APP_TOKEN is empty — only localhost may call /v1/*');
+  } else {
+    console.log('[gd-api] GD_APP_TOKEN required for /v1/*');
+  }
+  spectateFeed.start().catch(() => {});
 });

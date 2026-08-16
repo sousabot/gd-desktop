@@ -1,0 +1,198 @@
+.sp-page {
+  min-height: 100%;
+  background: #0e1018;
+  color: var(--gd-text-primary);
+  padding: 18px 22px 32px;
+  box-sizing: border-box;
+}
+.sp-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+.sp-head h1 {
+  margin: 0;
+  font-family: var(--gd-font-display);
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+}
+.sp-head p {
+  margin: 6px 0 0;
+  max-width: 640px;
+  font-size: 12px;
+  color: var(--gd-text-muted);
+  line-height: 1.45;
+}
+.sp-refresh {
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.1);
+  color: #fff;
+  padding: 8px 14px;
+  border-radius: 10px;
+  font-weight: 700;
+  font-size: 12px;
+  cursor: pointer;
+}
+.sp-refresh:disabled { opacity: 0.6; cursor: default; }
+
+.sp-note {
+  background: rgba(255, 180, 84, 0.08);
+  border: 1px solid rgba(255, 180, 84, 0.22);
+  color: #ffd7a0;
+  border-radius: 12px;
+  padding: 10px 12px;
+  font-size: 12px;
+  line-height: 1.45;
+  margin-bottom: 12px;
+}
+
+.sp-toolbar {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+.sp-toolbar select,
+.sp-toolbar input {
+  background: #12121b;
+  border: 1px solid rgba(255,255,255,0.08);
+  color: #fff;
+  border-radius: 10px;
+  padding: 8px 10px;
+  font-size: 12px;
+  font-family: var(--gd-font-body);
+}
+.sp-toolbar input { flex: 1; min-width: 180px; }
+.sp-toolbar select { min-width: 110px; }
+
+.sp-error {
+  background: var(--gd-danger-soft);
+  border: 1px solid rgba(255, 92, 104, 0.28);
+  color: #ffb4ba;
+  border-radius: 10px;
+  padding: 8px 12px;
+  font-size: 12px;
+  margin-bottom: 10px;
+}
+.sp-muted { font-size: 12px; color: var(--gd-text-muted); margin-bottom: 10px; }
+
+.sp-empty {
+  background: #12121b;
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 16px;
+  padding: 28px 22px;
+  color: var(--gd-text-muted);
+}
+.sp-empty h2 { margin: 0 0 8px; color: #fff; font-size: 18px; }
+
+.sp-list { display: flex; flex-direction: column; gap: 8px; }
+
+.sp-game {
+  display: grid;
+  grid-template-columns: 168px minmax(0, 1fr) 36px minmax(0, 1fr) 108px;
+  align-items: center;
+  gap: 10px;
+  background: #12121b;
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 14px;
+  padding: 10px 12px;
+}
+.sp-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+.sp-time {
+  font-family: var(--gd-font-mono);
+  font-weight: 700;
+  font-size: 16px;
+}
+.sp-region, .sp-queue {
+  font-size: 11px;
+  color: var(--gd-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.sp-rank {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #ffd76b;
+}
+.sp-rank img { width: 16px; height: 16px; object-fit: contain; }
+
+.sp-team {
+  display: flex;
+  gap: 4px;
+  min-width: 0;
+  overflow: hidden;
+}
+.sp-player {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  background: transparent;
+  border: 0;
+  color: inherit;
+  cursor: pointer;
+  padding: 0;
+}
+.sp-player img { border-radius: 8px; }
+.sp-name {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  font-size: 10px;
+  line-height: 1.2;
+  color: var(--gd-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sp-name em {
+  font-style: normal;
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--gd-gold);
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sp-player.is-pro .sp-name { color: #fff; }
+.sp-vs {
+  text-align: center;
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--gd-text-faint);
+}
+
+.sp-watch {
+  background: #fff;
+  color: #111;
+  border: 0;
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-weight: 800;
+  font-size: 12px;
+  cursor: pointer;
+}
+.sp-watch:disabled { opacity: 0.6; cursor: default; }
+
+@media (max-width: 1100px) {
+  .sp-game {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+  .sp-watch { width: 100%; }
+}

@@ -1,6 +1,5 @@
 import React from 'react';
-import { NavLink, useNavigate } from 'react-router-dom';
-import { useSession } from '../state/SessionContext';
+import { NavLink, useSearchParams } from 'react-router-dom';
 import './Sidebar.css';
 
 function IconHome() {
@@ -83,6 +82,14 @@ function IconChamp() {
     </svg>
   );
 }
+function IconTier() {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
+      <path d="M4 14.5h12M6.2 11h7.6M8 7.5h4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+      <path d="M10 3.2 12.1 7.4 16.8 8l-3.4 3.1.9 4.6L10 13.6 5.7 15.7l.9-4.6L3.2 8l4.7-.6L10 3.2Z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/>
+    </svg>
+  );
+}
 function IconCompare() {
   return (
     <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
@@ -98,6 +105,15 @@ function IconHistory() {
     </svg>
   );
 }
+function IconDraft() {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
+      <rect x="3.5" y="4.5" width="5.2" height="11" rx="1.2" stroke="currentColor" strokeWidth="1.5"/>
+      <rect x="11.3" y="4.5" width="5.2" height="11" rx="1.2" stroke="currentColor" strokeWidth="1.5"/>
+      <path d="M6.1 8h0M6.1 11h0M13.9 8h0M13.9 11h0" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
+    </svg>
+  );
+}
 
 const NAV_GROUPS = [
   {
@@ -106,6 +122,7 @@ const NAV_GROUPS = [
       { to: '/', label: 'Dashboard', icon: <IconHome />, end: true },
       { to: '/history', label: 'History', icon: <IconHistory /> },
       { to: '/champions', label: 'Champions', icon: <IconChamp /> },
+      { label: 'Tier List', icon: <IconTier />, soon: true },
       { to: '/leaderboard', label: 'Leaderboard', icon: <IconList /> },
       { to: '/live', label: 'Live Status', icon: <IconLive /> },
       { to: '/compare', label: 'Compare', icon: <IconCompare /> },
@@ -115,10 +132,11 @@ const NAV_GROUPS = [
     label: 'GD App',
     items: [
       { to: '/link-account', label: 'Link Account', icon: <IconLink /> },
-      { label: 'Replays', icon: <IconReplay />, soon: true },
+      { to: '/draft', label: 'Draft', icon: <IconDraft /> },
+      { to: '/replays', label: 'Replays', icon: <IconReplay /> },
       { label: 'Overlays', icon: <IconGrid />, soon: true },
-      { label: 'Watch', icon: <IconWatch />, soon: true },
-      { label: 'Collections', icon: <IconCollection />, soon: true },
+      { to: '/spectate', label: 'Spectate', icon: <IconWatch /> },
+      { to: '/collections', label: 'Collections', icon: <IconCollection /> },
     ],
   },
   {
@@ -129,13 +147,22 @@ const NAV_GROUPS = [
   },
 ];
 
+const PLAYER_PATHS = new Set(['/', '/history', '/champions', '/live']);
+
+function playerNavTo(to, searchParams) {
+  if (!PLAYER_PATHS.has(to)) return to;
+  const name = searchParams.get('name');
+  const tag = searchParams.get('tag');
+  const q = searchParams.get('q');
+    if (name) {
+      return `${to}?name=${encodeURIComponent(name)}${tag ? `&tag=${encodeURIComponent(tag)}` : ''}`;
+    }
+  if (q) return `${to}?q=${encodeURIComponent(q)}`;
+  return to;
+}
+
 export default function Sidebar() {
-  const { session, setSession } = useSession();
-  const navigate = useNavigate();
-  const unlink = () => {
-    setSession(null);
-    navigate('/link-account');
-  };
+  const [searchParams] = useSearchParams();
 
   return (
     <aside className="gd-sidebar">
@@ -153,7 +180,7 @@ export default function Sidebar() {
               ) : (
                 <NavLink
                   key={item.to}
-                  to={item.to}
+                  to={playerNavTo(item.to, searchParams)}
                   end={item.end}
                   className={({ isActive }) =>
                     `gd-sidebar__link${isActive ? ' gd-sidebar__link--active' : ''}`
@@ -167,18 +194,6 @@ export default function Sidebar() {
           </div>
         ))}
       </nav>
-
-      {session ? (
-        <div className="gd-sidebar__account">
-          <div className="gd-sidebar__account-id">{session.gameName}#{session.tagLine}</div>
-          <div className="gd-sidebar__account-actions">
-            <NavLink to="/link-account">Switch</NavLink>
-            <button type="button" onClick={unlink}>Unlink</button>
-          </div>
-        </div>
-      ) : (
-        <NavLink to="/link-account" className="gd-sidebar__login">Link account</NavLink>
-      )}
     </aside>
   );
 }

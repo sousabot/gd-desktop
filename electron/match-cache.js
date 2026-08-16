@@ -7,7 +7,7 @@ const fs = require('fs');
 const path = require('path');
 const { app } = require('electron');
 
-const MAX_ENTRIES = 300;
+const MAX_ENTRIES = 1200;
 
 function cachePath() {
   return path.join(app.getPath('userData'), 'match-cache.json');

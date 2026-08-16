@@ -1,0 +1,172 @@
+.cl-page {
+  min-height: 100%;
+  background: #0e1018;
+  color: var(--gd-text-primary);
+  display: flex;
+  flex-direction: column;
+  padding: 18px 22px 28px;
+  box-sizing: border-box;
+}
+.cl-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+.cl-head h1 {
+  margin: 0;
+  font-family: var(--gd-font-display);
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+}
+.cl-head p { margin: 6px 0 0; font-size: 12px; color: var(--gd-text-muted); }
+.cl-refresh {
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.1);
+  color: #fff;
+  padding: 8px 14px;
+  border-radius: 10px;
+  font-weight: 700;
+  font-size: 12px;
+  cursor: pointer;
+}
+.cl-refresh:disabled { opacity: 0.6; cursor: default; }
+
+.cl-empty {
+  background: #12121b;
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 16px;
+  padding: 28px 22px;
+  color: var(--gd-text-muted);
+}
+.cl-empty h2 { margin: 0 0 8px; color: #fff; font-size: 18px; }
+
+.cl-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 16px;
+}
+.cl-stats div {
+  background: #12121b;
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 14px;
+  padding: 14px 16px;
+}
+.cl-stats strong {
+  display: block;
+  font-size: 20px;
+  font-family: var(--gd-font-display);
+  letter-spacing: -0.03em;
+}
+.cl-stats span { font-size: 11px; color: var(--gd-text-muted); }
+
+.cl-toolbar {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+.cl-toolbar input {
+  flex: 1;
+  min-width: 180px;
+  background: #12121b;
+  border: 1px solid rgba(255,255,255,0.08);
+  color: #fff;
+  border-radius: 10px;
+  padding: 9px 12px;
+  font-size: 13px;
+}
+.cl-tabs { display: flex; gap: 6px; }
+.cl-tabs button {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.08);
+  color: var(--gd-text-muted);
+  border-radius: 999px;
+  padding: 7px 12px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.cl-tabs button.is-on {
+  color: #ffd76b;
+  border-color: rgba(255,215,107,0.4);
+  background: rgba(255,215,107,0.12);
+}
+
+.cl-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(148px, 1fr));
+  gap: 10px;
+}
+.cl-card {
+  position: relative;
+  overflow: hidden;
+  border-radius: 12px;
+  background: #12121b;
+  border: 1px solid rgba(255,255,255,0.06);
+  min-height: 210px;
+}
+.cl-card img {
+  width: 100%;
+  height: 210px;
+  object-fit: cover;
+  object-position: top center;
+  display: block;
+  background: #1a1c28;
+}
+.cl-card-ph {
+  width: 100%;
+  height: 210px;
+  background: #1a1c28;
+}
+.cl-card-meta {
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  padding: 28px 10px 10px;
+  background: linear-gradient(180deg, transparent, rgba(8,8,14,0.92));
+}
+.cl-card-meta strong { display: block; font-size: 12px; }
+.cl-card-meta span { font-size: 10px; color: rgba(255,255,255,0.62); }
+.cl-card.is-epic { box-shadow: inset 0 0 0 1px rgba(160,107,255,0.55); }
+.cl-card.is-legendary { box-shadow: inset 0 0 0 1px rgba(255,140,50,0.6); }
+.cl-card.is-mythic { box-shadow: inset 0 0 0 1px rgba(255,215,107,0.7); }
+.cl-card.is-ultimate { box-shadow: inset 0 0 0 1px rgba(255,92,104,0.7); }
+
+.cl-champs {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 8px;
+}
+.cl-champ {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: #12121b;
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 12px;
+  padding: 8px 10px;
+}
+.cl-champ img,
+.cl-champ-ph {
+  width: 44px;
+  height: 44px;
+  border-radius: 8px;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+.cl-champ-ph {
+  background: #1a1c28;
+}
+.cl-champ strong { display: block; font-size: 13px; }
+.cl-champ span { font-size: 11px; color: var(--gd-text-muted); }
+.cl-champ.is-locked { opacity: 0.45; }
+.cl-none { grid-column: 1 / -1; color: var(--gd-text-muted); font-size: 13px; }
+
+@media (max-width: 720px) {
+  .cl-stats { grid-template-columns: 1fr; }
+}

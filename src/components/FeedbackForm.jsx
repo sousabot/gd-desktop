@@ -3,7 +3,7 @@ import { useLocation } from 'react-router-dom';
 import { useSession } from '../state/SessionContext';
 import './FeedbackForm.css';
 
-const APP_VERSION = '0.1.0';
+const FALLBACK_VERSION = '0.1.0';
 
 export default function FeedbackForm({ open, onClose }) {
   const { session } = useSession();
@@ -59,7 +59,7 @@ export default function FeedbackForm({ open, onClose }) {
         contact: contact.trim(),
         riotId,
         page: location.pathname || '/',
-        appVersion: APP_VERSION,
+        appVersion: (await window.gdAPI?.appInfo?.())?.version || FALLBACK_VERSION,
       });
       setSent(true);
     } catch (err) {

@@ -25,9 +25,24 @@ export function useDdragonVersion() {
   return version;
 }
 
+export function champDdragonId(name) {
+  return String(name || 'Aatrox').replace(/[^a-zA-Z0-9]/g, '').replace(/^./, (c) => c.toUpperCase());
+}
+
 export function champIconUrl(name, version = cached) {
-  const id = String(name || 'Aatrox').replace(/[^a-zA-Z0-9]/g, '').replace(/^./, (c) => c.toUpperCase());
-  return `https://ddragon.leagueoflegends.com/cdn/${version}/img/champion/${id}.png`;
+  return `https://ddragon.leagueoflegends.com/cdn/${version}/img/champion/${champDdragonId(name)}.png`;
+}
+
+export function champLoadingUrl(name) {
+  return `https://ddragon.leagueoflegends.com/cdn/img/champion/loading/${champDdragonId(name)}_0.jpg`;
+}
+
+export function champSpellImgUrl(file, version = cached) {
+  return `https://ddragon.leagueoflegends.com/cdn/${version}/img/spell/${file}`;
+}
+
+export function champPassiveImgUrl(file, version = cached) {
+  return `https://ddragon.leagueoflegends.com/cdn/${version}/img/passive/${file}`;
 }
 
 export function profileIconUrl(id, version = cached) {
@@ -38,9 +53,45 @@ export function itemIconUrl(id, version = cached) {
   return `https://ddragon.leagueoflegends.com/cdn/${version}/img/item/${id}.png`;
 }
 
-export const PLATFORM_LABELS = { euw1: 'EUW', na1: 'NA', kr: 'KR' };
+export function itemIconCdragon(id) {
+  return `https://cdn.communitydragon.org/latest/item/${id}/icon`;
+}
+
+let itemNamePromise = null;
+export function getItemNameIndex() {
+  if (!itemNamePromise) {
+    itemNamePromise = getDdragonVersion()
+      .then((v) => fetch(`https://ddragon.leagueoflegends.com/cdn/${v}/data/en_US/item.json`))
+      .then((r) => r.json())
+      .then((data) => {
+        const byName = {};
+        Object.entries(data.data || {}).forEach(([id, item]) => {
+          const name = String(item.name || '').trim().toLowerCase();
+          if (!name) return;
+          const num = Number(id);
+          byName[name] = num;
+          byName[name.replace(/['’]/g, '')] = num;
+        });
+        return byName;
+      })
+      .catch(() => ({}));
+  }
+  return itemNamePromise;
+}
+
+export function useItemNameIndex() {
+  const [index, setIndex] = useState({});
+  useEffect(() => { getItemNameIndex().then(setIndex); }, []);
+  return index;
+}
+
+export const PLATFORM_LABELS = {
+  euw1: 'EUW', eun1: 'EUNE', na1: 'NA', br1: 'BR', la1: 'LAN', la2: 'LAS',
+  kr: 'KR', jp1: 'JP', oc1: 'OCE', tr1: 'TR', ru: 'RU', me1: 'ME',
+  sg2: 'SG', ph2: 'PH', tw2: 'TW', th2: 'TH', vn2: 'VN',
+};
 export function platformLabel(platform) {
-  return PLATFORM_LABELS[platform] || 'EUW';
+  return PLATFORM_LABELS[platform] || String(platform || '').toUpperCase() || '—';
 }
 
 const SPELL_FALLBACK = {
@@ -85,6 +136,29 @@ export function spellIconUrl(spellId, version = cached, spellMap = SPELL_FALLBAC
   return `https://ddragon.leagueoflegends.com/cdn/${version}/img/spell/${id}.png`;
 }
 
+const SHARD_CDN = 'https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/global/default/v1/perk-images/statmods/';
+const SHARD_ICONS = {
+  5001: { name: 'Health Scaling', file: 'statmodshealthplusicon.png' },
+  5002: { name: 'Armor', file: 'statmodsarmoricon.png' },
+  5003: { name: 'Magic Resist', file: 'statmodsmagicresicon.png' },
+  5005: { name: 'Attack Speed', file: 'statmodsattackspeedicon.png' },
+  5007: { name: 'Ability Haste', file: 'statmodscdrscalingicon.png' },
+  5008: { name: 'Adaptive Force', file: 'statmodsadaptiveforceicon.png' },
+  5010: { name: 'Move Speed', file: 'statmodsmovementspeedicon.png' },
+  5011: { name: 'Health', file: 'statmodshealthscalingicon.png' },
+  5012: { name: 'Resist Scaling', file: 'statmodsadaptiveforcescalingicon.png' },
+  5013: { name: 'Tenacity', file: 'statmodstenacityicon.png' },
+};
+
+function withShards(byId = {}) {
+  const next = { ...byId };
+  Object.entries(SHARD_ICONS).forEach(([id, shard]) => {
+    next[Number(id)] = { name: shard.name, shardFile: shard.file };
+  });
+  return next;
+}
+
+let runeTreesCache = [];
 let runeIndexPromise = null;
 export function getRuneIndex() {
   if (!runeIndexPromise) {
@@ -92,8 +166,9 @@ export function getRuneIndex() {
       .then((v) => fetch(`https://ddragon.leagueoflegends.com/cdn/${v}/data/en_US/runesReforged.json`))
       .then((r) => r.json())
       .then((trees) => {
+        runeTreesCache = Array.isArray(trees) ? trees : [];
         const byId = {};
-        (trees || []).forEach((tree) => {
+        runeTreesCache.forEach((tree) => {
           byId[tree.id] = { name: tree.name, icon: tree.icon };
           (tree.slots || []).forEach((slot) => {
             (slot.runes || []).forEach((rune) => {
@@ -101,21 +176,48 @@ export function getRuneIndex() {
             });
           });
         });
-        return byId;
+        return fetch('https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/global/default/v1/perks.json')
+          .then((r) => r.json())
+          .then((perks) => {
+            (perks || []).forEach((p) => {
+              const path = String(p.iconPath || '')
+                .toLowerCase()
+                .replace(/^\/lol-game-data\/assets\/v1\//, '');
+              if (!byId[p.id]) byId[p.id] = { name: p.name, cdragon: path };
+              else if (!byId[p.id].icon && path) byId[p.id].cdragon = path;
+            });
+            return withShards(byId);
+          })
+          .catch(() => withShards(byId));
       })
-      .catch(() => ({}));
+      .catch(() => withShards());
   }
   return runeIndexPromise;
 }
 
 export function useRuneIndex() {
-  const [index, setIndex] = useState({});
+  const [index, setIndex] = useState(() => withShards());
   useEffect(() => { getRuneIndex().then(setIndex); }, []);
   return index;
 }
 
+export function useRuneTrees() {
+  const [trees, setTrees] = useState(runeTreesCache);
+  useEffect(() => {
+    getRuneIndex().then(() => setTrees(runeTreesCache));
+  }, []);
+  return trees;
+}
+
 export function runeIconUrl(id, index = {}) {
-  const icon = index[id]?.icon;
-  if (!icon) return null;
-  return `https://ddragon.leagueoflegends.com/cdn/img/${icon}`;
+  const n = Number(id);
+  const icon = index[n]?.icon || index[id]?.icon;
+  if (icon) return `https://ddragon.leagueoflegends.com/cdn/img/${icon}`;
+  const shard = SHARD_ICONS[n];
+  if (shard) return `${SHARD_CDN}${shard.file}`;
+  const cdragon = index[n]?.cdragon || index[id]?.cdragon;
+  if (cdragon) {
+    return `https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/global/default/${cdragon}`;
+  }
+  return `https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/global/default/v1/perk-images/statmods/statmodsadaptiveforceicon.png`;
 }

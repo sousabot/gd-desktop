@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useSession } from '../state/SessionContext';
 import { REGIONS, parseRiotIdInput, linkErrorMessage } from '../lib/regions';
+import { noticeFromError } from '../lib/apiNotice';
 import './LinkAccount.css';
 
 export default function LinkAccount() {
@@ -12,6 +13,10 @@ export default function LinkAccount() {
   const [regionIdx, setRegionIdx] = useState(0);
   const [status, setStatus] = useState(null); // null | 'checking' | 'error'
   const [error, setError] = useState('');
+
+  useEffect(() => {
+    window.riotAPI?.wakeProxy?.().catch(() => {});
+  }, []);
 
   const unlink = () => {
     setSession(null);
@@ -80,6 +85,7 @@ export default function LinkAccount() {
       setStatus(null);
       navigate({ pathname: '/', search: '' }, { replace: true });
     } catch (err) {
+      noticeFromError(err);
       setStatus('error');
       setError(linkErrorMessage(err));
     }
@@ -122,7 +128,11 @@ export default function LinkAccount() {
               <option key={r.platform} value={i}>{r.label}</option>
             ))}
           </select>
-          <p className="gd-link-hint">Server is used as a hint — we still look up the League shard from Riot.</p>
+          <p className="gd-link-hint">
+            {status === 'checking'
+              ? 'Looking up that Riot ID. The first try after opening the app can take up to 20 seconds while the API wakes up.'
+              : 'Server is used as a hint — we still look up the League shard from Riot.'}
+          </p>
 
           {status === 'error' && <p className="gd-link-error">{error}</p>}
 

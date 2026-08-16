@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import {
   champIconUrl,
+  champLoadingUrl,
+  itemIconCdragon,
   itemIconUrl,
   runeIconUrl,
   spellIconUrl,
@@ -26,17 +28,41 @@ export function ChampionIcon({ name, size = 36, className = '', title }) {
   );
 }
 
-export function ItemIcon({ id, size = 28 }) {
-  const version = useDdragonVersion();
-  if (!id) {
-    return <span className="gd-item-empty" style={{ width: size, height: size }} />;
+export function ChampionPortrait({ name, className = '' }) {
+  const [src, setSrc] = useState(() => (name ? champLoadingUrl(name) : ''));
+  const [failed, setFailed] = useState(!name);
+  useEffect(() => {
+    setSrc(name ? champLoadingUrl(name) : '');
+    setFailed(!name);
+  }, [name]);
+  if (!name || failed) {
+    return <div className={`gd-champ-portrait is-empty ${className}`.trim()} />;
   }
   return (
     <img
-      src={itemIconUrl(id, version)}
-      alt=""
+      src={src}
+      alt={name}
+      className={`gd-champ-portrait ${className}`.trim()}
+      onError={() => setFailed(true)}
+    />
+  );
+}
+
+export function ItemIcon({ id, size = 28, title }) {
+  const version = useDdragonVersion();
+  const [src, setSrc] = useState(() => (id ? itemIconCdragon(id) : ''));
+  useEffect(() => { setSrc(id ? itemIconCdragon(id) : ''); }, [id]);
+  if (!id) {
+    return <span className="gd-item-empty" style={{ width: size, height: size }} title={title} />;
+  }
+  return (
+    <img
+      src={src}
+      alt={title || ''}
+      title={title || ''}
       className="gd-item-icon"
       style={{ width: size, height: size }}
+      onError={() => setSrc(itemIconUrl(id, version))}
     />
   );
 }
@@ -56,13 +82,15 @@ export function SpellIcon({ id, size = 22 }) {
 
 export function RuneIcon({ id, size = 28 }) {
   const index = useRuneIndex();
-  const src = runeIconUrl(id, index);
+  const n = Number(id);
+  const src = runeIconUrl(n, index);
+  const name = index[n]?.name || '';
   if (!src) return <span className="gd-item-empty" style={{ width: size, height: size }} />;
   return (
     <img
       src={src}
-      alt={index[id]?.name || ''}
-      title={index[id]?.name}
+      alt={name}
+      title={name}
       className="gd-rune-icon"
       style={{ width: size, height: size }}
     />

@@ -60,9 +60,12 @@ function loadEnv() {
     process.env.GD_API_URL = process.env.GD_API_URL.trim().replace(/\/$/, '');
   }
   // Packaged testers must hit the proxy even if gd.env failed to unpack.
-  if (app.isPackaged && !String(process.env.GD_API_URL || '').trim()) {
-    process.env.GD_API_URL = 'https://gd-desktop.onrender.com';
-    console.log('[riot-ipc] Packaged build: using default API proxy');
+  if (app.isPackaged) {
+    process.env.GD_API_URL = String(process.env.GD_API_URL || '').trim() || 'https://gd-desktop.onrender.com';
+    console.log(`[riot-ipc] Packaged build: using API proxy ${process.env.GD_API_URL}`);
+    if (!String(process.env.GD_APP_TOKEN || '').trim()) {
+      console.warn('[riot-ipc] Packaged build is missing GD_APP_TOKEN in gd.env. The proxy will reject requests.');
+    }
   }
 }
 
@@ -77,19 +80,56 @@ function isRiotUrl(raw) {
   }
 }
 
+const DEFAULT_PROXY = 'https://gd-desktop.onrender.com';
+
+function activeProxy() {
+  if (String(process.env.GD_USE_LOCAL_KEY || '').trim() === '1') return '';
+  return String(process.env.GD_API_URL || DEFAULT_PROXY).trim().replace(/\/$/, '');
+}
+
+let proxyReady = false;
+let wakingProxy = null;
+
+async function wakeProxy() {
+  const proxy = activeProxy();
+  if (!proxy) return { ok: true, skipped: true };
+  if (proxyReady) return { ok: true };
+  if (wakingProxy) return wakingProxy;
+  wakingProxy = (async () => {
+    try {
+      const res = await fetch(`${proxy}/health`, {
+        headers: { 'User-Agent': 'GD-Esports-Desktop/0.1' },
+        signal: AbortSignal.timeout(45000),
+      });
+      if (res.ok) proxyReady = true;
+      return { ok: res.ok };
+    } catch (err) {
+      wakingProxy = null;
+      return { ok: false, error: err.message || 'GD API wake failed' };
+    }
+  })();
+  return wakingProxy;
+}
+
 async function riotFetch(url, attempt = 0) {
   if (!process.env.RIOT_API_KEY && !process.env.GD_API_URL) loadEnv();
   if (!isRiotUrl(url)) throw new Error('Riot API 400 Bad Request — blocked URL');
 
-  const proxy = String(process.env.GD_API_URL || '').trim();
+  const proxy = activeProxy();
   if (proxy) {
+    if (app.isPackaged && !String(process.env.GD_APP_TOKEN || '').trim()) {
+      throw new Error('Proxy 401: GD_APP_TOKEN is missing from gd.env');
+    }
+    await wakeProxy();
     const res = await fetch(`${proxy}/v1/riot`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'User-Agent': 'GD-Esports-Desktop/0.1',
         ...(process.env.GD_APP_TOKEN ? { Authorization: `Bearer ${process.env.GD_APP_TOKEN}` } : {}),
       },
       body: JSON.stringify({ url }),
+      signal: AbortSignal.timeout(20000),
     });
     const body = await res.json().catch(() => ({}));
     if (res.status === 429 && attempt < 2) {
@@ -97,7 +137,7 @@ async function riotFetch(url, attempt = 0) {
       return riotFetch(url, attempt + 1);
     }
     if (!res.ok) {
-      throw new Error(body.error || `Riot API ${res.status} ${res.statusText} — ${url}`);
+      throw new Error(`Proxy ${res.status}: ${body.error || res.statusText || 'request failed'}`);
     }
     return body.data;
   }
@@ -105,14 +145,17 @@ async function riotFetch(url, attempt = 0) {
   const key = String(process.env.RIOT_API_KEY || '').trim();
   if (!key) throw new Error('RIOT_API_KEY is not set in .env');
 
-  const res = await fetch(url, { headers: { 'X-Riot-Token': key } });
+  const res = await fetch(url, {
+    headers: { 'X-Riot-Token': key },
+    signal: AbortSignal.timeout(12000),
+  });
 
   if (res.status === 429 && attempt < 2) {
     const retryAfterSec = Number(res.headers.get('retry-after')) || 1;
     // A short Retry-After means we tripped the ~20/sec burst limit — worth
     // waiting out. A long one means the ~100-per-2-minutes budget is blown;
     // don't freeze the UI for up to 2 minutes, fail fast instead so the
-    // existing per-feature fallbacks (mock data, masked names, etc.) kick in.
+    // existing per-feature fallbacks (honest errors, masked names, etc.) kick in.
     if (retryAfterSec <= 5) {
       await new Promise((r) => setTimeout(r, retryAfterSec * 1000));
       return riotFetch(url, attempt + 1);
@@ -166,7 +209,7 @@ const PLATFORM_TO_MATCH_REGION = {
 const ALL_PLATFORMS = Object.keys(PLATFORM_TO_MATCH_REGION);
 
 function apiStatus(err) {
-  const match = String(err?.message || '').match(/Riot API (\d+)/);
+  const match = String(err?.message || '').match(/(?:Riot API|Proxy) (\d+)/);
   return match ? Number(match[1]) : 0;
 }
 
@@ -194,7 +237,7 @@ async function cachedBulkFetch(cacheModule, prefix, ids, fetchOne, ttlMs = Infin
     const fetched = await mapWithConcurrency(missing, BULK_CONCURRENCY, (i) => fetchOne(ids[i]));
     missing.forEach((origIdx, j) => {
       results[origIdx] = fetched[j];
-      if (fetched[j]) cache[`${prefix}:${ids[origIdx]}`] = { timestamp: now, data: fetched[j] };
+      if (fetched[j] != null) cache[`${prefix}:${ids[origIdx]}`] = { timestamp: now, data: fetched[j] };
     });
     cacheModule.writeCache(cache);
   }
@@ -203,8 +246,12 @@ async function cachedBulkFetch(cacheModule, prefix, ids, fetchOne, ttlMs = Infin
 }
 
 module.exports = function registerRiotHandlers(ipcMain) {
-  if (process.env.GD_API_URL) {
-    console.log(`[riot-ipc] Using API proxy ${process.env.GD_API_URL}`);
+  const useLocal = String(process.env.GD_USE_LOCAL_KEY || '').trim() === '1';
+  const proxy = useLocal
+    ? ''
+    : String(process.env.GD_API_URL || DEFAULT_PROXY).trim().replace(/\/$/, '');
+  if (proxy) {
+    console.log(`[riot-ipc] Using API proxy ${proxy}`);
   } else if (process.env.RIOT_API_KEY) {
     console.log(`[riot-ipc] API key loaded (${process.env.RIOT_API_KEY.slice(0, 8)}…)`);
   } else {
@@ -215,71 +262,85 @@ module.exports = function registerRiotHandlers(ipcMain) {
   // re-searching the same player repeatedly (e.g. during dev testing) was
   // re-fetching this every time for no reason.
   async function fetchAccountByRiotId(gameName, tagLine, region) {
-    const host = accountHost(region);
     const name = String(gameName || '').trim();
     const tag = String(tagLine || '').trim().replace(/^#/, '');
     if (!name || !tag) throw new Error('Riot API 400 Bad Request — missing Riot ID');
 
-    const cacheKey = `riotid:${host}:${name.toLowerCase()}#${tag.toLowerCase()}`;
-    const cache = idCache.readCache();
-    const entry = cache[cacheKey];
-    if (entry && Date.now() - entry.timestamp < idCache.TTL_MS) return entry.data;
+    const preferred = accountHost(region);
+    const hosts = [preferred, 'europe', 'americas', 'asia'].filter((h, i, all) => all.indexOf(h) === i);
+    let lastErr = null;
+    for (const host of hosts) {
+      const cacheKey = `riotid:${host}:${name.toLowerCase()}#${tag.toLowerCase()}`;
+      const cache = idCache.readCache();
+      const entry = cache[cacheKey];
+      if (entry && Date.now() - entry.timestamp < idCache.TTL_MS) return entry.data;
 
-    const data = await riotFetch(
-      `https://${host}.api.riotgames.com/riot/account/v1/accounts/by-riot-id/${encodeURIComponent(name)}/${encodeURIComponent(tag)}`
-    );
-    cache[cacheKey] = { timestamp: Date.now(), data };
-    idCache.writeCache(cache);
-    return data;
+      try {
+        const data = await riotFetch(
+          `https://${host}.api.riotgames.com/riot/account/v1/accounts/by-riot-id/${encodeURIComponent(name)}/${encodeURIComponent(tag)}`
+        );
+        cache[cacheKey] = { timestamp: Date.now(), data };
+        idCache.writeCache(cache);
+        return data;
+      } catch (err) {
+        lastErr = err;
+        if (apiStatus(err) !== 404) throw err;
+      }
+    }
+    throw lastErr || new Error('Riot API 404 Not Found — account');
   }
 
   ipcMain.handle('riot:getAccountByRiotId', (_e, { gameName, tagLine, region }) =>
     fetchAccountByRiotId(gameName, tagLine, region)
   );
 
-  async function findLeagueShard(puuid, preferredPlatform, accountRegion) {
+  ipcMain.handle('riot:wakeProxy', () => wakeProxy());
+  wakeProxy().catch(() => {});
+
+  async function findLeagueShard(puuid, preferredPlatform) {
     const cacheKey = `shard:${puuid}`;
     const cache = idCache.readCache();
     const cached = cache[cacheKey];
     if (cached && Date.now() - cached.timestamp < idCache.TTL_MS) return cached.data;
 
-    const preferred = String(preferredPlatform || '').toLowerCase();
-    let shard = '';
-    try {
-      const active = await riotFetch(
-        `https://${accountRegion}.api.riotgames.com/riot/account/v1/active-shards/by-game/lol/by-puuid/${puuid}`
-      );
-      if (active?.activeShard) shard = String(active.activeShard).toLowerCase();
-    } catch (err) {
-      const status = apiStatus(err);
-      if (status === 401 || status === 403 || status === 429) throw err;
-    }
+    const preferred = String(preferredPlatform || 'euw1').toLowerCase();
+    const preferredOk = PLATFORM_TO_MATCH_REGION[preferred] ? preferred : 'euw1';
+    const continent = PLATFORM_TO_MATCH_REGION[preferredOk];
+    const sameRegion = ALL_PLATFORMS.filter((p) => PLATFORM_TO_MATCH_REGION[p] === continent && p !== preferredOk);
+    const others = ALL_PLATFORMS.filter((p) => p !== preferredOk && PLATFORM_TO_MATCH_REGION[p] !== continent);
+    const order = [preferredOk, ...sameRegion, ...others];
 
-    if (!shard) {
-      const ordered = [
-        preferred,
-        ...ALL_PLATFORMS.filter((p) => p !== preferred && PLATFORM_TO_MATCH_REGION[p] === PLATFORM_TO_MATCH_REGION[preferred]),
-        ...ALL_PLATFORMS.filter((p) => p !== preferred && PLATFORM_TO_MATCH_REGION[p] !== PLATFORM_TO_MATCH_REGION[preferred]),
-      ].filter(Boolean);
-
-      let lastErr;
-      for (const platform of ordered) {
-        try {
-          await riotFetch(`https://${platform}.api.riotgames.com/lol/summoner/v4/summoners/by-puuid/${puuid}`);
-          shard = platform;
-          break;
-        } catch (err) {
-          lastErr = err;
-          const status = apiStatus(err);
-          if (status === 401 || status === 403 || status === 429) throw err;
-        }
+    const probe = async (plat) => {
+      try {
+        await riotFetch(`https://${plat}.api.riotgames.com/lol/summoner/v4/summoners/by-puuid/${puuid}`);
+        return { plat };
+      } catch (err) {
+        const status = apiStatus(err);
+        if (status === 404 || status === 400) return { miss: true };
+        return { err };
       }
-      if (!shard) throw lastErr || new Error('Riot API 404 Not Found — no League summoner for that Riot ID');
+    };
+
+    const save = (plat) => {
+      cache[cacheKey] = { timestamp: Date.now(), data: plat };
+      idCache.writeCache(cache);
+      return plat;
+    };
+
+    for (let i = 0; i < order.length; i += (i === 0 ? 1 : 4)) {
+      const batch = i === 0 ? [order[0]] : order.slice(i, i + 4);
+      const results = await Promise.all(batch.map(probe));
+      const hit = results.find((r) => r.plat);
+      if (hit) return save(hit.plat);
+      const fatal = results.find((r) => r.err);
+      if (fatal) {
+        const status = apiStatus(fatal.err);
+        if (status === 429 || status === 401 || status === 403) break;
+        throw fatal.err;
+      }
     }
 
-    cache[cacheKey] = { timestamp: Date.now(), data: shard };
-    idCache.writeCache(cache);
-    return shard;
+    return save(preferredOk);
   }
 
   function shardInfo(shard, fallbackRegion) {
@@ -330,10 +391,13 @@ module.exports = function registerRiotHandlers(ipcMain) {
   );
 
   ipcMain.handle('riot:getRankedByPuuidsBulk', (_e, { puuids, platform }) =>
-    cachedBulkFetch(idCache, 'ranked', puuids, (puuid) =>
-      riotFetch(`https://${platform}.api.riotgames.com/lol/league/v4/entries/by-puuid/${puuid}`).catch(() => []),
-      5 * 60 * 1000
-    )
+    cachedBulkFetch(idCache, `ranked-v2:${platform || 'euw1'}`, puuids, async (puuid) => {
+      try {
+        return await riotFetch(`https://${platform}.api.riotgames.com/lol/league/v4/entries/by-puuid/${puuid}`);
+      } catch {
+        return null;
+      }
+    }, 15 * 60 * 1000)
   );
 
   ipcMain.handle('riot:getMatchIds', (_e, { puuid, region, count = 10, queue }) => {
@@ -408,7 +472,7 @@ module.exports = function registerRiotHandlers(ipcMain) {
   // fetching this on top of accounts/summoners/mastery every single time.
   const LAST_MATCH_TTL_MS = 10 * 60 * 1000;
   ipcMain.handle('riot:getLastMatchIdsBulk', (_e, { puuids, region, queue = 420, count = 20 }) =>
-    cachedBulkFetch(idCache, `matchids${count}`, puuids, async (puuid) => {
+    cachedBulkFetch(idCache, `matchids:${queue}:${count}`, puuids, async (puuid) => {
       try {
         return await riotFetch(`https://${region}.api.riotgames.com/lol/match/v5/matches/by-puuid/${puuid}/ids?start=0&count=${count}&queue=${queue}`);
       } catch {
@@ -417,5 +481,23 @@ module.exports = function registerRiotHandlers(ipcMain) {
     }, LAST_MATCH_TTL_MS)
   );
 
+  require('./tierlist')(ipcMain, {
+    riotFetch,
+    mapWithConcurrency,
+    matchRegionOf: (platform) => PLATFORM_TO_MATCH_REGION[platform] || 'europe',
+    matchCache,
+    fetchMatch: async (region, id, bag) => {
+      const cache = bag || matchCache.readCache();
+      const key = `match:${id}`;
+      if (cache[key]?.data) return cache[key].data;
+      const data = await riotFetch(`https://${region}.api.riotgames.com/lol/match/v5/matches/${id}`, 2);
+      cache[key] = { timestamp: Date.now(), data };
+      if (!bag) matchCache.writeCache(cache);
+      return data;
+    },
+  });
   require('./feedback-ipc')(ipcMain);
 };
+
+module.exports.riotFetch = riotFetch;
+module.exports.mapWithConcurrency = mapWithConcurrency;

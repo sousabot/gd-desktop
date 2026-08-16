@@ -1,11 +1,14 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { getSummonerDashboard, getActiveGame } from '../services/riotApi';
-import { champIconUrl, itemIconUrl, platformLabel, profileIconUrl, useDdragonVersion } from '../services/ddragon';
-import { playerSearchPath, parsePlayerSearch, playerQuery } from '../lib/playerRoute';
+import { getSummonerDashboard, getLiveGame } from '../services/riotApi';
+import { champIconUrl, platformLabel, profileIconUrl, useDdragonVersion } from '../services/ddragon';
+import { parsePlayerSearch, parseRiotId, playerQuery } from '../lib/playerRoute';
+import { rememberPlayer } from '../lib/recentPlayers';
+import { apiUserMessage, noticeFromError } from '../lib/apiNotice';
 import { MODE_KEYS, MODE_LABEL, MODE_QUEUE } from '../lib/queues';
 import { useSession } from '../state/SessionContext';
 import MatchReview from '../components/MatchReview';
+import { GD_SCORE_HINT } from '../lib/gdScore';
 import './Dashboard.css';
 import CHALLENGER_IMG  from '../assets/ranks/CHALLENGER.webp';
 import GRANDMASTER_IMG from '../assets/ranks/GRANDMASTER_SMALL.webp';
@@ -79,11 +82,11 @@ function Sparkline({ data = [], up = true }) {
 }
 
 /* ─── StatCard ─────────────────────────────────────────────── */
-function StatCard({ label, value, delta, deltaDir, sparkData }) {
+function StatCard({ label, value, delta, deltaDir, sparkData, hint }) {
   const isUp   = deltaDir === 'up';
   const isDown = deltaDir === 'down';
   return (
-    <div className="db-stat-card">
+    <div className="db-stat-card" title={hint || undefined}>
       <div className="db-stat-top">
         <span className="db-stat-label">{label}</span>
         <Sparkline data={sparkData} up={!isDown} />
@@ -147,7 +150,7 @@ function LPRing({ lp, win }) {
   const pct = Math.min(lp / 100, 1);
   const c = win ? '#3ecf8e' : '#ff5c68';
   return (
-    <div className="db-lp-ring">
+    <div className="db-lp-ring" title={`GD Score ${lp}`}>
       <svg width="28" height="28" viewBox="0 0 28 28">
         <circle cx="14" cy="14" r={r} fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="2.5" />
         <circle cx="14" cy="14" r={r} fill="none" stroke={c} strokeWidth="2.5"
@@ -161,7 +164,8 @@ function LPRing({ lp, win }) {
 
 /* ─── RecentGameRow ────────────────────────────────────────── */
 function RecentGameRow({ game, active, onSelect }) {
-  const { champion, win, kills, deaths, assists, kda, ago, lp, queueLabel, queueType } = game;
+  const { champion, win, kills, deaths, assists, kda, ago, gdScore, lp, queueLabel, queueType } = game;
+  const score = gdScore ?? lp;
   return (
     <button
       type="button"
@@ -180,7 +184,7 @@ function RecentGameRow({ game, active, onSelect }) {
         <span className="db-recent-kda">{kills}/{deaths}/{assists}</span>
         <span className="db-recent-kdaval">{kda} KDA</span>
       </div>
-      <LPRing lp={lp} win={win} />
+      <LPRing lp={score} win={win} />
     </button>
   );
 }
@@ -200,9 +204,12 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
   const [mode, setMode] = useState('Solo');
-  const [liveGame, setLiveGame] = useState('checking');
+  const [liveGame, setLiveGame] = useState(null);
+  const [liveAt, setLiveAt] = useState(Date.now());
+  const [now, setNow] = useState(Date.now());
   const [matchIdx, setMatchIdx] = useState(0);
   const [reviewOpen, setReviewOpen] = useState(false);
+  const [lcuCol, setLcuCol] = useState(null);
 
   const lookup = {
     region: session?.region || 'europe',
@@ -220,29 +227,30 @@ export default function Dashboard() {
     setLoadError('');
     setMatchIdx(0);
     setReviewOpen(false);
-    const [gameName, tagLine] = riotId.split('#');
+    setLiveGame(null);
+    const parsed = parseRiotId(riotId, session?.tagLine || '');
+    if (!parsed) {
+      setProfile(null);
+      setLoadError('Use Name#TAG — for example Ana de Armas#7589.');
+      setLoading(false);
+      return;
+    }
     try {
       const data = await getSummonerDashboard({
-        gameName,
-        tagLine: tagLine || session?.tagLine || 'EUW',
+        gameName: parsed.gameName,
+        tagLine: parsed.tagLine,
         region: lookup.region,
         platform: lookup.platform,
         queue: MODE_QUEUE[selectedMode],
         count: 20,
       });
-      const loadedId = String(data?.riotId || '').toLowerCase();
-      const wantedId = String(riotId || '').toLowerCase();
-      if (data?.riotId && wantedId && loadedId !== wantedId && loadedId === 'five fingers#euw') {
-        throw new Error('Loaded placeholder data instead of the linked account');
-      }
       setProfile(data);
+      rememberPlayer(data?.riotId || riotId);
     } catch (err) {
       console.error('[Dashboard] Failed to load summoner:', err);
+      noticeFromError(err);
       setProfile(null);
-      const msg = String(err?.message || '');
-      setLoadError(msg.includes('403') || msg.includes('401')
-        ? 'Riot API key is missing or expired. Update .env and restart the app.'
-        : 'Could not load this account. Check the Riot ID, region, and API key.');
+      setLoadError(apiUserMessage(err) || 'Could not load this account. Check the Riot ID (Name#TAG) and region.');
     } finally {
       setLoading(false);
     }
@@ -258,37 +266,73 @@ export default function Dashboard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeId, session?.platform, session?.region]);
 
-  // Check whether the loaded summoner is currently in a live game, for the
-  // "Live Status" feature card. Not polled continuously — re-checks whenever
-  // a new profile loads (new search or mode switch).
   useEffect(() => {
-    if (!profile?.riotId) return;
+    if (!window.lcuAPI?.getCollections) return undefined;
+    let alive = true;
+    window.lcuAPI.getCollections(false).then((next) => {
+      if (alive && next?.connected) setLcuCol(next);
+    }).catch(() => {});
+    return () => { alive = false; };
+  }, []);
+
+  // Spectator for whoever is on this dashboard — linked account or a searched player.
+  useEffect(() => {
+    if (!profile?.riotId) return undefined;
     let cancelled = false;
-    setLiveGame('checking');
     const [gameName, tagLine] = profile.riotId.split('#');
-    getActiveGame({
+    const lookupLive = {
       gameName,
       tagLine,
       region: lookup.region,
-      platform: lookup.platform,
-    }).then((g) => {
-      if (!cancelled) setLiveGame(g || null);
-    });
-    return () => { cancelled = true; };
-  }, [profile?.riotId]);
+      platform: profile.platform || lookup.platform,
+    };
+    const tick = (first) => {
+      if (first) setLiveGame((prev) => prev);
+      getLiveGame(lookupLive).then((g) => {
+        if (cancelled) return;
+        setLiveGame(g || null);
+        if (g) setLiveAt(Date.now());
+      }).catch(() => {
+        if (!cancelled) setLiveGame(null);
+      });
+    };
+    tick(true);
+    const id = setInterval(() => tick(false), 15000);
+    return () => { cancelled = true; clearInterval(id); };
+  }, [profile?.riotId, profile?.platform, lookup.region, lookup.platform]);
 
-  const winrate = profile
+  useEffect(() => {
+    if (!liveGame) return undefined;
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [liveGame]);
+
+  const winrate = profile && profile.wins != null
     ? Math.round((profile.wins / Math.max(1, profile.wins + profile.losses)) * 100)
-    : 0;
+    : null;
 
   const s  = profile?.stats || {};
   const sp = profile?.sparklines || {};
   const games = profile?.recentGames || [];
   const lg = games[matchIdx] || profile?.lastGame || null;
   const rc = profile ? rankColor(profile.rank) : '#a06bff';
-  const splashChamp = lg?.champion || lg?.allyTeam?.[0] || 'Neeko';
+  const resolvedPlatform = profile?.platform || lookup.platform;
   const collections = profile?.collections || { played: 0, total: 0 };
   const lens = profile?.lens || { score: 0, series: [50], avgDeaths: 0 };
+  const inLive = !!(liveGame && (liveGame.blue?.length || liveGame.red?.length));
+  const liveYou = inLive
+    ? [...(liveGame.blue || []), ...(liveGame.red || [])].find((p) => (
+      p.isSelf || String(p.riotId || '').toLowerCase() === String(profile?.riotId || '').toLowerCase()
+    ))
+    : null;
+  const splashChamp = liveYou?.champion || lg?.champion || null;
+  const liveAlly = liveYou?.teamId === 200 ? liveGame.red : liveGame?.blue;
+  const liveEnemy = liveYou?.teamId === 200 ? liveGame.blue : liveGame?.red;
+  const liveBlue = inLive ? (liveAlly || []).map((p) => p.champion) : null;
+  const liveRed = inLive ? (liveEnemy || []).map((p) => p.champion) : null;
+  const liveElapsed = inLive
+    ? (liveGame.gameLength || 0) + Math.floor((now - liveAt) / 1000)
+    : 0;
 
   const cycleMatch = (dir) => {
     if (!games.length) return;
@@ -313,7 +357,7 @@ export default function Dashboard() {
 
   const stats = [
     { label: 'KDA', value: s.kda, delta: s.kdaDelta, deltaDir: s.kdaDeltaDir, sparkData: sp.kda },
-    { label: 'DPM Score', value: s.dpmScore, delta: s.dpmDelta, deltaDir: s.dpmDeltaDir, sparkData: sp.dpmScore },
+    { label: 'GD Score', value: s.gdScore, delta: s.gdDelta, deltaDir: s.gdDeltaDir, sparkData: sp.gdScore, hint: GD_SCORE_HINT },
     { label: 'KP', value: s.kp, delta: s.kpDelta, deltaDir: s.kpDeltaDir, sparkData: sp.kp },
     { label: 'CSM', value: s.csm, delta: s.csmDelta, deltaDir: s.csmDeltaDir, sparkData: sp.csm },
     { label: 'Vision Score', value: s.visionScore, delta: s.visionDelta, deltaDir: s.visionDeltaDir, sparkData: sp.vision },
@@ -352,7 +396,7 @@ export default function Dashboard() {
           </div>
           <div className="db-toolbar-meta">
             <span className="db-filter-label">Last 20 games</span>
-            <span className="db-filter-label highlight">Season 15</span>
+            <span className="db-filter-label">{platformLabel(resolvedPlatform)}</span>
             <button type="button" className="db-filter-label highlight" onClick={() => navigate(`/history${viewingOther ? playerQuery(activeId) : ''}`)}>
               Full history
             </button>
@@ -382,7 +426,7 @@ export default function Dashboard() {
 
               {/* Hero: splash + profile + rank + glass stats */}
               <div className="db-hero">
-                <div className="db-splash-bg" style={{ backgroundImage: `url(${splashImg(splashChamp)})` }} />
+                <div className="db-splash-bg" style={splashChamp ? { backgroundImage: `url(${splashImg(splashChamp)})` } : undefined} />
                 <div className="db-splash-overlay" />
 
                 <div className="db-hero-inner">
@@ -399,6 +443,7 @@ export default function Dashboard() {
                         <h2 className="db-summoner-name">{profile.riotId?.split('#')[0]}</h2>
                         <div className="db-profile-meta">
                           <span className="db-summoner-tag">#{profile.riotId?.split('#')[1]}</span>
+                          <span className="db-summoner-tag">{profile.region || platformLabel(resolvedPlatform)}</span>
                         </div>
                       </div>
                     </div>
@@ -410,14 +455,20 @@ export default function Dashboard() {
                           <img src={rankImg(profile.rank)} alt={profile.rank} className="db-rank-card-emblem" />
                         )}
                         <div className="db-rank-card-info">
-                          <span className="db-rank-card-name" style={{ color: rc }}>{profile.rank}</span>
+                          <span className="db-rank-card-name" style={{ color: rc }}>{profile.rank || 'Unranked'}</span>
                           {profile.ladderRank && (
                             <span className="db-rank-card-num" style={{ color: rc }}>#{profile.ladderRank}</span>
                           )}
-                          <span className="db-rank-card-lp" style={{ color: rc }}>{profile.lp} LP</span>
+                          <span className="db-rank-card-lp" style={{ color: rc }}>
+                            {profile.lp != null ? `${profile.lp} LP` : '—'}
+                          </span>
                         </div>
                       </div>
-                      <div className="db-rank-card-record">{profile.wins}W – {profile.losses}L · {winrate}%</div>
+                      <div className="db-rank-card-record">
+                        {profile.wins != null
+                          ? `${profile.wins}W – ${profile.losses}L${winrate != null ? ` · ${winrate}%` : ''}`
+                          : 'Ranked data unavailable'}
+                      </div>
                     </div>
                   </div>
 
@@ -436,29 +487,37 @@ export default function Dashboard() {
                   <button type="button" className="db-card-side-arrow is-right" aria-label="Next" onClick={() => cycleMatch(1)}>›</button>
 
                   <div className="db-card-match-top">
-                    <span className="db-region-badge">{lg?.region || platformLabel(lookup.platform)}</span>
-                    <span className={`db-match-timer${liveGame && liveGame !== 'checking' ? ' is-live' : ''}`}>
+                    <span className="db-region-badge">{lg?.region || platformLabel(resolvedPlatform)}</span>
+                    <span className={`db-match-timer${inLive ? ' is-live' : ''}`}>
                       <span className="db-match-timer-dot" />
-                      {liveGame && liveGame !== 'checking'
-                        ? fmtElapsed(liveGame.gameLength)
+                      {inLive
+                        ? fmtElapsed(liveElapsed)
                         : lg
                           ? `${lg.durationMin}:${String(lg.durationSec || 0).padStart(2, '0')}`
                           : '--:--'}
                     </span>
-                    {lg?.queueType && <span className="db-queue-badge">{lg.queueType}</span>}
+                    {(inLive ? liveGame.queueName : lg?.queueType) && (
+                      <span className="db-queue-badge">{inLive ? liveGame.queueName : lg.queueType}</span>
+                    )}
                   </div>
 
                   <div className="db-card-match-teams">
                     <div className="db-card-match-row">
-                      {(lg?.allyTeam || ['Aatrox', 'LeeSin', 'Ahri', 'Jinx', 'Thresh']).slice(0, 5).map((c, i) => (
-                        <ChampionIcon key={`a-${c}-${i}`} name={c} size={46} team="blue" />
-                      ))}
+                      {Array.from({ length: 5 }).map((_, i) => {
+                        const c = (liveBlue || lg?.allyTeam)?.[i];
+                        return c
+                          ? <ChampionIcon key={`a-${c}-${i}`} name={c} size={46} team="blue" />
+                          : <span key={`a-empty-${i}`} className="db-champ-empty" />;
+                      })}
                     </div>
                     <div className="db-vs-chip">VS</div>
                     <div className="db-card-match-row">
-                      {(lg?.enemyTeam || ['Renekton', 'Viego', 'Viktor', 'Caitlyn', 'Lulu']).slice(0, 5).map((c, i) => (
-                        <ChampionIcon key={`e-${c}-${i}`} name={c} size={46} team="red" />
-                      ))}
+                      {Array.from({ length: 5 }).map((_, i) => {
+                        const c = (liveRed || lg?.enemyTeam)?.[i];
+                        return c
+                          ? <ChampionIcon key={`e-${c}-${i}`} name={c} size={46} team="red" />
+                          : <span key={`e-empty-${i}`} className="db-champ-empty" />;
+                      })}
                     </div>
                   </div>
 
@@ -476,15 +535,21 @@ export default function Dashboard() {
 
                   <button
                     type="button"
-                    className={`db-pill-btn db-pill-btn--live${liveGame && liveGame !== 'checking' ? ' is-live' : ''}`}
-                    onClick={() => navigate(viewingOther ? `/live${playerSearchPath(activeId).slice(1)}` : '/live')}
+                    className={`db-pill-btn db-pill-btn--live${inLive ? ' is-live' : ''}`}
+                    onClick={() => navigate(`/live${playerQuery(activeId)}`)}
                   >
-                    {liveGame && liveGame !== 'checking' ? 'Watch live' : 'Live status'}
+                    {inLive ? 'Watch live' : 'Live status'}
                   </button>
                 </article>
 
-                <article className="db-dpm-card db-card-soon">
-                  {lg && (
+                <article
+                  className="db-dpm-card db-card-soon"
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => navigate('/replays')}
+                  onKeyDown={(e) => { if (e.key === 'Enter') navigate('/replays'); }}
+                >
+                  {lg && splashChamp && (
                     <img
                       src={loadingImg(splashChamp)}
                       alt=""
@@ -494,11 +559,9 @@ export default function Dashboard() {
                   )}
                   <div className="db-card-soon-overlay" />
                   <div className="db-card-soon-body">
-                    <span className="db-card-soon-kicker">Last replay</span>
-                    <h3>Coming soon…</h3>
-                    {lg && (
-                      <p>{lg.kills}/{lg.deaths}/{lg.assists} · {lg.kda} KDA</p>
-                    )}
+                    <span className="db-card-soon-kicker">Replays</span>
+                    <h3>Record this client</h3>
+                    <p>Borderless or windowed. Exclusive fullscreen cannot be captured.</p>
                   </div>
                 </article>
 
@@ -539,31 +602,28 @@ export default function Dashboard() {
                   </article>
                 )}
 
-                <article className="db-dpm-card db-card-overlays">
-                  <img className="db-overlays-bg" src={splashImg('Syndra')} alt="" />
+                <article className="db-dpm-card db-card-overlays is-soon">
                   <div className="db-overlays-dim" />
-                  <div className="db-overlays-widget">
-                    <img
-                      src={itemIconUrl(6653, ddVersion)}
-                      alt=""
-                    />
-                    <div>
-                      <div className="db-overlays-item-name">Liandry’s</div>
-                      <div className="db-overlays-item-stats">+70 AP</div>
-                      <div className="db-overlays-item-stats">+300 HP</div>
-                    </div>
-                  </div>
                   <div className="db-overlays-foot">
                     <span className="db-overlays-logo" aria-hidden="true" />
                     <span className="db-card-title-lg">Overlays</span>
+                    <span className="db-overlays-soon">Soon · Riot-safe only</span>
                   </div>
                 </article>
 
-                <article className="db-dpm-card db-card-collections">
+                <article
+                  className="db-dpm-card db-card-collections"
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => navigate('/collections')}
+                  onKeyDown={(e) => { if (e.key === 'Enter') navigate('/collections'); }}
+                >
                   <img className="db-collections-art" src={splashImg('Rakan')} alt="" />
                   <div className="db-collections-overlay" />
                   <div className="db-collections-count">
-                    {collections.played} / {collections.total} champions played
+                    {lcuCol
+                      ? `${lcuCol.skinsOwned} / ${lcuCol.skinsTotal} skins`
+                      : `${collections.played} / ${collections.total} champions played`}
                   </div>
                   <div className="db-collections-foot">
                     <span className="db-hex-icon" aria-hidden="true" />
@@ -613,6 +673,9 @@ export default function Dashboard() {
                     onSelect={() => setMatchIdx(i)}
                   />
                 ))}
+                {!(profile.recentGames || []).length ? (
+                  <div className="db-recent-empty">No games in this queue yet.</div>
+                ) : null}
               </div>
             </aside>
           </div>
@@ -622,7 +685,7 @@ export default function Dashboard() {
       {reviewOpen && lg && (
         <MatchReview
           game={lg}
-          platform={lookup.platform}
+          platform={resolvedPlatform}
           onClose={() => setReviewOpen(false)}
         />
       )}

@@ -34,17 +34,34 @@ export function parseRiotIdInput(nameInput = '', tagInput = '') {
 
 export function linkErrorMessage(err) {
   const msg = String(err?.message || err || '');
+  const lower = msg.toLowerCase();
+  if (lower.includes('abort') || lower.includes('timeout') || lower.includes('timed out')) {
+    return 'GD API took too long. Wait a few seconds and try again — the first request wakes the server.';
+  }
+  if (msg.startsWith('Proxy ')) {
+    if (msg.includes('401') || msg.includes('Unauthorized')) {
+      return 'This build is not authorized for the GD API. Set the same GD_APP_TOKEN on the server and in client.env, then rebuild Setup.';
+    }
+    if (msg.includes('401') || msg.includes('403')) {
+      return `Riot rejected the key on the server. ${msg}`;
+    }
+    if (msg.includes('429')) return 'Rate limit hit. Wait 2 minutes, then try again.';
+    if (msg.includes('404') || msg.toLowerCase().includes('not found')) {
+      return 'Could not find that Riot ID. Check the name and tag (for example Name#EUW).';
+    }
+    return `Could not reach the GD API (${msg}). Check that gd-desktop.onrender.com is live, then try again.`;
+  }
   if (msg.includes('RIOT_API_KEY is not set') || msg.toLowerCase().includes('gd_api_url')) {
     return 'Riot connection is not configured. Dev: add RIOT_API_KEY to .env. Shared build: set GD_API_URL to the proxy.';
   }
   if (msg.includes(' 401 ') || msg.includes(' 403 ')) {
-    return 'Riot rejected the request (401/403). The API key on the server may be expired — update RIOT_API_KEY on Render and try again.';
+    return `Riot rejected the request. ${msg.slice(0, 180)}`;
   }
   if (msg.includes(' 429 ')) {
-    return 'Riot rate limit hit. Wait about a minute and try again.';
+    return 'Rate limit hit. Wait 2 minutes, then try again.';
   }
   if (msg.includes(' 404 ') || msg.toLowerCase().includes('not found')) {
     return 'Could not find that Riot ID. Check the name and tag (for example Name#EUW).';
   }
-  return 'Could not link that account. Check the name, tag, and that the app was restarted after changing .env.';
+  return msg ? `Could not link that account. ${msg.slice(0, 180)}` : 'Could not link that account.';
 }

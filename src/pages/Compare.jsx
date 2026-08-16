@@ -3,6 +3,7 @@ import { useSession } from '../state/SessionContext';
 import { comparePlayers } from '../services/riotApi';
 import { ChampionIcon } from '../components/GameIcons';
 import { parseRiotId } from '../lib/playerRoute';
+import { apiUserMessage, noticeFromError } from '../lib/apiNotice';
 import './Compare.css';
 
 function wr(profile) {
@@ -51,8 +52,8 @@ export default function Compare() {
 
   const run = async (e) => {
     e?.preventDefault();
-    const leftId = parseRiotId(leftInput, session?.tagLine || 'EUW');
-    const rightId = parseRiotId(rightInput, session?.tagLine || 'EUW');
+    const leftId = parseRiotId(leftInput, session?.tagLine || '');
+    const rightId = parseRiotId(rightInput, session?.tagLine || '');
     if (!leftId || !rightId) {
       setError('Enter both Riot IDs as Name#TAG.');
       return;
@@ -66,7 +67,8 @@ export default function Compare() {
       );
       setResult(data);
     } catch (err) {
-      setError(err?.message || 'Could not compare these players.');
+      noticeFromError(err);
+      setError(apiUserMessage(err) || 'Could not compare these players.');
       setResult(null);
     } finally {
       setLoading(false);

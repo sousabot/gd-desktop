@@ -101,7 +101,30 @@
   gap: 6px;
   min-height: 0;
 }
-.lv-page--live .lv-grid { gap: 8px; }
+.lv-roles {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 6px;
+  align-items: center;
+}
+.lv-roles-tag {
+  display: grid;
+  place-items: center;
+  height: 28px;
+}
+.lv-roles-tag img,
+.lv-roles-tag .gd-role-icon,
+.lv-roles-tag .lv-role-icon {
+  width: 16px;
+  height: 16px;
+  opacity: 0.7;
+  color: #c8aa6e;
+}
+.lv-card--empty {
+  pointer-events: none;
+  opacity: 0.2;
+  min-height: 0;
+}
 
 .lv-card {
   position: relative;
@@ -124,6 +147,7 @@
   border-radius: 10px;
   overflow: hidden;
   cursor: pointer;
+  transition: border-color 0.15s ease, filter 0.15s ease;
 }
 .lv-page--live .lv-card {
   height: auto;
@@ -131,7 +155,8 @@
   max-height: 385px;
   border-radius: 10px;
 }
-.lv-card:hover { border-color: rgba(255,255,255,0.18); }
+.lv-card:not(:disabled):hover { border-color: rgba(255,255,255,0.28); filter: brightness(1.08); }
+.lv-card:disabled { cursor: default; }
 .lv-card.is-self {
   border-color: rgba(255, 215, 107, 0.7);
   z-index: 1;
@@ -212,6 +237,8 @@
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   text-shadow: 0 1px 8px rgba(0,0,0,0.75);
 }
+.lv-card-tag { font-weight: 700; font-size: 13px; opacity: 0.7; }
+.lv-card.is-locked { cursor: default; }
 .lv-card-actions {
   display: flex;
   align-items: center;

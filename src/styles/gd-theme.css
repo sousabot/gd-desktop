@@ -1,11 +1,11 @@
 @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500;600&display=swap');
 
 :root {
-  --gd-bg: #0a0c17;
-  --gd-bg-card: #12152a;
-  --gd-bg-card-hover: #161a35;
-  --gd-border: rgba(124, 92, 255, 0.14);
-  --gd-border-strong: rgba(124, 92, 255, 0.32);
+  --gd-bg: #0b0e16;
+  --gd-bg-card: #121722;
+  --gd-bg-card-hover: #171d2b;
+  --gd-border: rgba(255, 255, 255, 0.08);
+  --gd-border-strong: rgba(255, 255, 255, 0.14);
 
   --gd-violet: #7c5cff;
   --gd-violet-soft: rgba(124, 92, 255, 0.16);
@@ -32,13 +32,14 @@
 }
 
 * { box-sizing: border-box; }
-html, body, #root { height: 100%; }
+html, body, #root {
+  height: 100%;
+  width: 100%;
+  background: transparent;
+  overflow: hidden;
+}
 
 body {
-  background: var(--gd-bg);
-  background-image:
-    radial-gradient(circle at 15% 0%, rgba(124, 92, 255, 0.10) 0%, transparent 45%),
-    radial-gradient(circle at 85% 20%, rgba(255, 180, 84, 0.06) 0%, transparent 40%);
   color: var(--gd-text-primary);
   font-family: var(--gd-font-body);
   margin: 0;
@@ -51,23 +52,42 @@ a { color: inherit; }
 .gd-shell {
   display: flex;
   flex-direction: column;
-  height: 100vh;
-  overflow: hidden;
+  height: 100%;
+  width: 100%;
   background: var(--gd-bg);
+  background-image:
+    radial-gradient(circle at 12% 0%, rgba(124, 92, 255, 0.08) 0%, transparent 42%),
+    radial-gradient(circle at 88% 16%, rgba(255, 180, 84, 0.05) 0%, transparent 38%);
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.45);
 }
 .gd-shell__body {
   display: flex;
   flex: 1;
   min-height: 0;
+  min-width: 0;
+  overflow: hidden;
 }
 .gd-shell__main {
   flex: 1;
   min-width: 0;
   display: flex;
   flex-direction: column;
+  overflow-x: hidden;
   overflow-y: auto;
+  overflow-y: overlay;
+  scrollbar-gutter: auto;
+  background: #0e1018;
 }
 
 ::-webkit-scrollbar { width: 8px; height: 8px; }
-::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-track { background: transparent; margin: 0; }
 ::-webkit-scrollbar-thumb { background: var(--gd-border-strong); border-radius: 8px; }
+.gd-shell__main::-webkit-scrollbar {
+  width: 8px;
+  background: transparent;
+}
+.gd-shell__main::-webkit-scrollbar-track {
+  background: #0e1018;
+}

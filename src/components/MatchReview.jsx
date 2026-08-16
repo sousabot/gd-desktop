@@ -9,6 +9,28 @@ function fmtSigned(v) {
   return `${n >= 0 ? '+' : ''}${n}`;
 }
 
+function goldStory(gd15, won) {
+  if (gd15 == null) return 'Gold at 15 was not available (short game or no timeline).';
+  const n = Math.round(gd15);
+  const abs = Math.abs(n);
+  if (!won) {
+    if (n <= -300) {
+      return `You lost gold at 15 by ${abs}. Missed CS or deaths in lane put you behind before the map opened.`;
+    }
+    if (n >= 300) {
+      return `You were ahead by ${abs} gold at 15, so lane was not why you lost. The game slipped in fights or objectives after that.`;
+    }
+    return `Lane gold was even at 15 (${fmtSigned(n)}). The loss came later — fights, objectives, or a throw.`;
+  }
+  if (n >= 300) {
+    return `You were ahead of your lane by ${abs} gold at 15. That CS or kill lead is a big reason this game closed.`;
+  }
+  if (n <= -300) {
+    return `You were behind by ${abs} gold at 15 and still won. Lane was a hole; the rest of the map paid it back.`;
+  }
+  return `Lane was roughly even at 15 (${fmtSigned(n)} gold). The rest of the game decided it.`;
+}
+
 export default function MatchReview({ game, platform, kicker, onClose }) {
   useEffect(() => {
     if (!game) return undefined;
@@ -21,6 +43,9 @@ export default function MatchReview({ game, platform, kicker, onClose }) {
 
   const gd15 = game.goldDiff15;
   const gdClass = gd15 == null ? '' : gd15 >= 0 ? 'is-pos' : 'is-neg';
+  const share = game.damageShare != null ? `${Math.round(game.damageShare * 100)}%` : null;
+  const path = (game.buildPath || []).filter(Boolean);
+  const finals = (game.items || []).filter(Boolean);
 
   return (
     <div className="gd-review-overlay" onClick={onClose} role="presentation">
@@ -56,17 +81,31 @@ export default function MatchReview({ game, platform, kicker, onClose }) {
             <strong className={gdClass}>{fmtSigned(gd15)}</strong>
           </div>
           <div>
-            <span>CS</span>
-            <strong>{game.csm ?? game.cs}</strong>
+            <span>Damage share</span>
+            <strong>{share || '—'}</strong>
           </div>
         </div>
-        {(game.items || game.spells) && (
+        <p className="gd-review-story">{goldStory(gd15, game.win)}</p>
+        {path.length > 0 && (
+          <div>
+            <div className="gd-review-label">Build path</div>
+            <div className="gd-review-path">
+              {path.map((id, i) => (
+                <React.Fragment key={`bp-${id}-${i}`}>
+                  {i > 0 && <span className="gd-review-arrow">→</span>}
+                  <ItemIcon id={id} size={28} />
+                </React.Fragment>
+              ))}
+            </div>
+          </div>
+        )}
+        {(finals.length > 0 || game.spells) && (
           <div className="gd-review-build">
             <div className="gd-review-spells">
               {(game.spells || []).map((id, i) => <SpellIcon key={`sp-${i}`} id={id} size={24} />)}
             </div>
             <div className="gd-review-items">
-              {(game.items || []).map((id, i) => <ItemIcon key={`it-${i}`} id={id} size={32} />)}
+              {finals.map((id, i) => <ItemIcon key={`it-${i}`} id={id} size={32} />)}
             </div>
           </div>
         )}

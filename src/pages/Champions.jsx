@@ -2,7 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { getSummonerDashboard } from '../services/riotApi';
 import { ChampionIcon } from '../components/GameIcons';
-import { parsePlayerSearch } from '../lib/playerRoute';
+import { parsePlayerSearch, parseRiotId } from '../lib/playerRoute';
+import { apiUserMessage, noticeFromError } from '../lib/apiNotice';
 import { MODE_KEYS, MODE_LABEL, MODE_QUEUE } from '../lib/queues';
 import { useSession } from '../state/SessionContext';
 import './Champions.css';
@@ -35,11 +36,17 @@ export default function Champions() {
     }
     setLoading(true);
     setError('');
-    const [gameName, tagLine] = riotId.split('#');
+    const parsed = parseRiotId(riotId, session?.tagLine || '');
+    if (!parsed) {
+      setProfile(null);
+      setError('Use Name#TAG — for example Ana de Armas#7589.');
+      setLoading(false);
+      return;
+    }
     try {
       const data = await getSummonerDashboard({
-        gameName,
-        tagLine: tagLine || session?.tagLine || 'EUW',
+        gameName: parsed.gameName,
+        tagLine: parsed.tagLine,
         region: lookup.region,
         platform: lookup.platform,
         queue: MODE_QUEUE[selectedMode],
@@ -47,7 +54,8 @@ export default function Champions() {
       });
       setProfile(data);
     } catch (err) {
-      setError(err?.message || 'Could not load champion stats.');
+      noticeFromError(err);
+      setError(apiUserMessage(err) || 'Could not load champion stats.');
       setProfile(null);
     } finally {
       setLoading(false);

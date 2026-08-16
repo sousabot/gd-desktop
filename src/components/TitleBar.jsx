@@ -1,11 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
-import { playerSearchPath, parsePlayerSearch } from '../lib/playerRoute';
+import { playerSearchPath, parsePlayerSearch, parseRiotId, playerQuery } from '../lib/playerRoute';
+import { readRecentPlayers, rememberPlayer } from '../lib/recentPlayers';
 import { useSession } from '../state/SessionContext';
 import FeedbackForm from './FeedbackForm';
+import LOGO from '../assets/logo.png';
 import './TitleBar.css';
 
-const APP_VERSION = '0.1.0';
+const FALLBACK_VERSION = '0.1.0';
 const hasWindowApi = typeof window !== 'undefined' && !!window.windowControls;
 
 function IconBack() {
@@ -55,36 +57,58 @@ export default function TitleBar() {
   const viewedId = parsePlayerSearch(searchParams);
   const ownId = session ? `${session.gameName}#${session.tagLine}` : '';
   const [query, setQuery] = useState(viewedId || ownId);
-  const [maximized, setMaximized] = useState(false);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchHint, setSearchHint] = useState('');
+  const [recent, setRecent] = useState(readRecentPlayers);
+  const [appVersion, setAppVersion] = useState(FALLBACK_VERSION);
+
+  useEffect(() => {
+    window.gdUpdate?.info?.().then((info) => {
+      if (info?.version) setAppVersion(info.version);
+    }).catch(() => {});
+  }, []);
 
   useEffect(() => {
     setQuery(viewedId || ownId);
   }, [viewedId, ownId, location.pathname]);
 
-  useEffect(() => {
-    if (!hasWindowApi) return undefined;
-    window.windowControls.isMaximized().then(setMaximized);
-    return window.windowControls.onMaximizedChange(setMaximized);
-  }, []);
+  const goToPlayer = (raw) => {
+    const parsed = parseRiotId(raw, session?.tagLine || '');
+    if (!parsed) return;
+    const riotId = `${parsed.gameName}#${parsed.tagLine}`;
+    rememberPlayer(riotId);
+    setRecent(readRecentPlayers());
+    setSearchHint('');
+    setSearchOpen(false);
+    const isOwn = ownId && riotId.toLowerCase() === ownId.toLowerCase();
+    if (location.pathname.startsWith('/live')) {
+      navigate(`/live${playerQuery(riotId, parsed.tagLine)}`);
+      return;
+    }
+    navigate(isOwn ? '/' : playerSearchPath(riotId, parsed.tagLine));
+  };
 
   const submitSearch = (e) => {
     e.preventDefault();
     const next = query.trim();
     if (!next) return;
-    const isOwn = ownId && next.toLowerCase() === ownId.toLowerCase();
-    if (isOwn) navigate('/');
-    else navigate(playerSearchPath(next, session?.tagLine || 'EUW'));
+    if (!next.includes('#')) {
+      setSearchHint('Use Name#TAG — for example Ana de Armas#7589.');
+      setSearchOpen(true);
+      return;
+    }
+    goToPlayer(next);
   };
 
   return (
-    <header className="gd-titlebar" onDoubleClick={() => window.windowControls?.maximize()}>
+    <header className="gd-titlebar">
       <div className="gd-titlebar__left" onDoubleClick={(e) => e.stopPropagation()}>
         <div className="gd-titlebar__brand">
-          <span className="gd-titlebar__mark">GD</span>
+          <img className="gd-titlebar__logo" src={LOGO} alt="GD Esports" />
           <div className="gd-titlebar__names">
             <span className="gd-titlebar__name">GD</span>
-            <span className="gd-titlebar__ver">APP V.{APP_VERSION}</span>
+            <span className="gd-titlebar__ver">APP V.{appVersion}</span>
           </div>
         </div>
         <div className="gd-titlebar__nav">
@@ -100,17 +124,38 @@ export default function TitleBar() {
         </div>
       </div>
 
-      <form className="gd-titlebar__search" onSubmit={submitSearch} onDoubleClick={(e) => e.stopPropagation()}>
-        <svg className="gd-titlebar__search-icon" viewBox="0 0 20 20" fill="none" aria-hidden="true">
-          <circle cx="8.5" cy="8.5" r="5.5" stroke="currentColor" strokeWidth="1.5"/>
-          <path d="M13 13l3.5 3.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-        </svg>
-        <input
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search a player, champion, team, pro…"
-        />
-      </form>
+      <div className="gd-titlebar__search-wrap" onDoubleClick={(e) => e.stopPropagation()}>
+        <form className="gd-titlebar__search" onSubmit={submitSearch}>
+          <svg className="gd-titlebar__search-icon" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+            <circle cx="8.5" cy="8.5" r="5.5" stroke="currentColor" strokeWidth="1.5"/>
+            <path d="M13 13l3.5 3.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+          </svg>
+          <input
+            value={query}
+            onChange={(e) => { setQuery(e.target.value); setSearchHint(''); }}
+            onFocus={() => { setRecent(readRecentPlayers()); setSearchOpen(true); }}
+            onBlur={() => setTimeout(() => setSearchOpen(false), 180)}
+            placeholder="Search Name#TAG"
+            spellCheck={false}
+          />
+        </form>
+        {searchOpen && (searchHint || recent.length > 0) && (
+          <div className="gd-titlebar__recent">
+            {searchHint && <div className="gd-titlebar__search-hint">{searchHint}</div>}
+            {recent.length > 0 && <div className="gd-titlebar__recent-label">Recent</div>}
+            {recent.map((id) => (
+              <button
+                key={id}
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => { setQuery(id); goToPlayer(id); }}
+              >
+                {id}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
 
       <div className="gd-titlebar__right" onDoubleClick={(e) => e.stopPropagation()}>
         <button type="button" className="gd-titlebar__feedback" onClick={() => setFeedbackOpen(true)}>
@@ -133,16 +178,7 @@ export default function TitleBar() {
             <button type="button" className="gd-win-btn" onClick={() => window.windowControls.minimize()} aria-label="Minimize">
               <svg viewBox="0 0 12 12"><path d="M2 6h8" stroke="currentColor" strokeWidth="1.2"/></svg>
             </button>
-            <button type="button" className="gd-win-btn" onClick={() => window.windowControls.maximize()} aria-label={maximized ? 'Restore' : 'Maximize'}>
-              {maximized ? (
-                <svg viewBox="0 0 12 12">
-                  <path d="M3.5 4.5h5v5h-5v-5Z M4.5 3.5h5v5" fill="none" stroke="currentColor" strokeWidth="1.1"/>
-                </svg>
-              ) : (
-                <svg viewBox="0 0 12 12"><rect x="2.5" y="2.5" width="7" height="7" fill="none" stroke="currentColor" strokeWidth="1.1"/></svg>
-              )}
-            </button>
-            <button type="button" className="gd-win-btn gd-win-btn--close" onClick={() => window.windowControls.close()} aria-label="Close">
+            <button type="button" className="gd-win-btn gd-win-btn--close" onClick={() => window.windowControls.close()} aria-label="Minimize to tray" title="Minimize to tray">
               <svg viewBox="0 0 12 12"><path d="M3 3l6 6M9 3 3 9" stroke="currentColor" strokeWidth="1.2"/></svg>
             </button>
           </div>

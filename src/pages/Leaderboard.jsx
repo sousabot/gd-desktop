@@ -4,23 +4,19 @@ import { getTopLeague } from '../services/riotApi';
 import { champIconUrl, platformLabel, useDdragonVersion } from '../services/ddragon';
 import { playerSearchPath } from '../lib/playerRoute';
 import { useSession } from '../state/SessionContext';
+import RoleIcon from '../components/RoleIcon';
 import './Leaderboard.css';
 
 import CHALLENGER_IMG  from '../assets/ranks/CHALLENGER_SMALL.webp';
 import GRANDMASTER_IMG from '../assets/ranks/GRANDMASTER_SMALL.webp';
 import MASTER_IMG      from '../assets/ranks/MASTER.webp';
-import ROLE_TOP from '../assets/roles/top.svg';
-import ROLE_JUNGLE from '../assets/roles/jungle.svg';
-import ROLE_MID from '../assets/roles/mid.svg';
-import ROLE_ADC from '../assets/roles/adc.svg';
-import ROLE_SUPPORT from '../assets/roles/support.svg';
 
 const TIERS = ['challenger', 'grandmaster', 'master'];
 const TIER_COLORS = { challenger: '#ffd76b', grandmaster: '#ff5c68', master: '#a06bff' };
 const TIER_IMGS   = { challenger: CHALLENGER_IMG, grandmaster: GRANDMASTER_IMG, master: MASTER_IMG };
 const ROLES = ['Top', 'Jungle', 'Mid', 'ADC', 'Support'];
 
-function splitRiotId(name = '', fallbackTag = 'EUW') {
+function splitRiotId(name = '', fallbackTag = '') {
   const [gameName, tagLine] = String(name).split('#');
   return { gameName: gameName || name || '—', tagLine: tagLine || fallbackTag };
 }
@@ -32,27 +28,13 @@ function champsOf(row) {
   return (row.topChampions || []).slice(0, 4);
 }
 
-const ROLE_ICONS = {
-  Top: ROLE_TOP,
-  Jungle: ROLE_JUNGLE,
-  Mid: ROLE_MID,
-  ADC: ROLE_ADC,
-  Support: ROLE_SUPPORT,
-};
-
-function RoleIcon({ role, size = 18 }) {
-  const src = ROLE_ICONS[role];
-  if (!src) return null;
-  return (
-    <img
-      src={src}
-      alt=""
-      title={role}
-      className="lb-role-icon"
-      style={{ width: size, height: size }}
-    />
-  );
+function wrTone(pct) {
+  if (pct >= 58) return 'is-hot';
+  if (pct <= 48) return 'is-cold';
+  return '';
 }
+
+const PLACE_TONE = { 1: '#ffd76b', 2: '#c9d0dc', 3: '#cd7f32' };
 
 function ChampThumb({ name, size = 28 }) {
   const version = useDdragonVersion();
@@ -95,31 +77,47 @@ function RegionTag({ tag = 'EUW' }) {
   return <span className={`lb-region lb-region--${tag.toLowerCase()}`}>{tag}</span>;
 }
 
-function WinratePill({ pct }) {
-  return <span className="lb-wr-pill">{pct}%</span>;
+function WinrateCell({ pct, wins, losses }) {
+  return (
+    <div className="lb-row-wr">
+      <div className="lb-wr-copy">
+        <span className="lb-wl">{wins}W – {losses}L</span>
+        <span className={`lb-wr-pill ${wrTone(pct)}`}>{pct}%</span>
+      </div>
+      <div className="lb-wr-bar" aria-hidden="true">
+        <span style={{ width: `${Math.min(100, pct)}%` }} />
+      </div>
+    </div>
+  );
 }
 
 function PodiumCard({ row, place, emblem, region }) {
   const { gameName, tagLine } = splitRiotId(row.summonerName, region);
   const wr = wrOf(row);
-  const champs = champsOf(row, place - 1);
+  const champs = champsOf(row);
   const to = playerSearchPath(row.summonerName, region);
+  const tone = PLACE_TONE[place];
 
   return (
     <Link to={to} className={`lb-podium-card is-p${place} is-clickable`}>
       <div className="lb-podium-head">
-        <span className="lb-podium-place">{place}</span>
+        <span className="lb-podium-place" style={{ color: tone }}>{place}</span>
         <RegionTag tag={region} />
-        <PlayerAvatar name={gameName} url={row.profileIconUrl} size={42} />
+        <PlayerAvatar name={gameName} url={row.profileIconUrl} size={44} />
         <div className="lb-podium-who">
           <div className="lb-podium-name">{gameName}</div>
           <div className="lb-podium-sub">#{tagLine}</div>
         </div>
+        {row.role ? (
+          <span className="lb-podium-role" title={row.role}>
+            <RoleIcon role={row.role} size={16} />
+          </span>
+        ) : null}
       </div>
 
       <div className="lb-podium-lp-block">
         <img src={emblem} alt="" className="lb-podium-emblem" />
-        <div className="lb-podium-lp">{row.lp.toLocaleString()} <span>LP</span></div>
+        <div className="lb-podium-lp" style={{ color: tone }}>{row.lp.toLocaleString()} <span>LP</span></div>
         <div className="lb-podium-record">
           <b className="is-w">{row.wins}W</b> – <b className="is-l">{row.losses}L</b>
           <span className="lb-podium-wr">({wr}%)</span>
@@ -127,11 +125,11 @@ function PodiumCard({ row, place, emblem, region }) {
       </div>
 
       <div className="lb-podium-foot">
-        <span className="lb-podium-games">{gamesOf(row)} games</span>
+        <span className="lb-podium-kda">{kdaOf(row)} KDA</span>
         <div className="lb-champs">
           {champs.map((c) => <ChampThumb key={c} name={c} size={28} />)}
         </div>
-        <span className="lb-podium-kda">{kdaOf(row)} kda</span>
+        <span className="lb-podium-games">{gamesOf(row)} games</span>
       </div>
     </Link>
   );
@@ -146,12 +144,36 @@ export default function Leaderboard() {
   const [role, setRole] = useState('All');
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [enriching, setEnriching] = useState(false);
+  const [error, setError] = useState('');
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    getTopLeague({ tier, platform, region }).then((data) => {
-      if (!cancelled) { setRows(data); setLoading(false); }
+    setEnriching(false);
+    setError('');
+    getTopLeague({
+      tier,
+      platform,
+      region,
+      onPartial: (data) => {
+        if (cancelled) return;
+        setRows(Array.isArray(data) ? data : []);
+        setLoading(false);
+        setEnriching(true);
+      },
+    }).then((data) => {
+      if (cancelled) return;
+      setRows(Array.isArray(data) ? data : []);
+      setLoading(false);
+      setEnriching(false);
+    }).catch((err) => {
+      if (!cancelled) {
+        setLoading(false);
+        setEnriching(false);
+        setRows([]);
+        setError(err?.message || 'Could not load this ladder.');
+      }
     });
     return () => { cancelled = true; };
   }, [tier, platform, region]);
@@ -159,9 +181,11 @@ export default function Leaderboard() {
   const roleCounts = useMemo(() => {
     const counts = { Top: 0, Jungle: 0, Mid: 0, ADC: 0, Support: 0 };
     rows.forEach((r) => { if (r.role && counts[r.role] != null) counts[r.role] += 1; });
-    const known = Object.values(counts).reduce((a, b) => a + b, 0) || 1;
+    const known = Object.values(counts).reduce((a, b) => a + b, 0);
     const pct = {};
-    ROLES.forEach((r) => { pct[r] = ((counts[r] / known) * 100).toFixed(1); });
+    ROLES.forEach((r) => {
+      pct[r] = known >= 8 ? ((counts[r] / known) * 100).toFixed(1) : '—';
+    });
     return pct;
   }, [rows]);
 
@@ -170,7 +194,6 @@ export default function Leaderboard() {
     [rows, role]
   );
 
-  const color = TIER_COLORS[tier];
   const img = TIER_IMGS[tier];
   const top3 = filtered.slice(0, 3);
   const rest = filtered.slice(3);
@@ -216,21 +239,29 @@ export default function Leaderboard() {
         </div>
         <div className="lb-toolbar-right">
           <span className="lb-filter-chip">{regionTag} · Solo/Duo</span>
-          <button type="button" className="lb-pro-btn">PRO</button>
+          {enriching ? <span className="lb-filter-chip is-soft">Filling roles…</span> : null}
         </div>
       </div>
 
-      {loading ? (
-        <div className="lb-loading">
-          <div className="lb-spinner" style={{ borderTopColor: color }} />
-          <span>Loading {tier} players…</span>
+      {error && !rows.length ? (
+        <div className="lb-empty">
+          <span>{error.includes('desktop app') ? error : 'Could not load this ladder. Check the linked region and try again.'}</span>
+        </div>
+      ) : loading && !rows.length ? (
+        <div className="lb-body">
+          <div className="lb-podium">
+            {[1, 2, 3].map((n) => <div key={n} className={`lb-skel lb-skel-podium is-p${n}`} />)}
+          </div>
+          <div className="lb-list">
+            {Array.from({ length: 8 }).map((_, i) => <div key={i} className="lb-skel lb-skel-row" />)}
+          </div>
         </div>
       ) : (
         <div className="lb-body">
           {top3.length > 0 && (
             <div className="lb-podium">
               {top3.map((r, i) => (
-                <PodiumCard key={r.rank} row={r} place={i + 1} emblem={img} region={regionTag} />
+                <PodiumCard key={r.puuid || r.rank} row={r} place={i + 1} emblem={img} region={regionTag} />
               ))}
             </div>
           )}
@@ -248,9 +279,9 @@ export default function Leaderboard() {
             {rest.map((r) => {
               const { gameName, tagLine } = splitRiotId(r.summonerName, regionTag);
               const wr = wrOf(r);
-              const to = playerSearchPath(r.summonerName, regionTag);
+              const to = playerSearchPath(r.summonerName, tagLine || regionTag);
               return (
-                <Link key={r.rank} to={to} className="lb-row is-clickable">
+                <Link key={r.puuid || r.rank} to={to} className="lb-row is-clickable">
                   <div className="lb-row-player">
                     <span className="lb-rank-num">{r.rank}</span>
                     <RegionTag tag={regionTag} />
@@ -267,27 +298,27 @@ export default function Leaderboard() {
                         <RoleIcon role={r.role} size={18} />
                         <span>{r.role}</span>
                       </>
-                    ) : <span className="lb-muted">—</span>}
+                    ) : <span className="lb-muted">{enriching ? '…' : '—'}</span>}
                   </div>
 
                   <div className="lb-row-rank">
                     <img src={img} alt="" className="lb-row-emblem" />
-                    <span className="lb-lp-val">{r.lp.toLocaleString()} LP</span>
+                    <span className="lb-lp-val">{Number(r.lp || 0).toLocaleString()} LP</span>
                   </div>
 
-                  <div className="lb-row-wr">
-                    <span className="lb-wl">{r.wins}W – {r.losses}L</span>
-                    <WinratePill pct={wr} />
-                  </div>
+                  <WinrateCell pct={wr} wins={r.wins} losses={r.losses} />
 
                   <div className="lb-kda-val">{kdaOf(r)}</div>
 
                   <div className="lb-champs">
-                    {champsOf(r, r.rank).map((c) => <ChampThumb key={c} name={c} size={26} />)}
+                    {champsOf(r).map((c) => <ChampThumb key={c} name={c} size={26} />)}
                   </div>
                 </Link>
               );
             })}
+            {!rest.length && !top3.length && !loading ? (
+              <div className="lb-empty">No players in this filter.</div>
+            ) : null}
           </div>
         </div>
       )}

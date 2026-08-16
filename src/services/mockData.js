@@ -17,9 +17,9 @@ export const MOCK_PROFILE = {
     kda: '3.3',
     kdaDelta: '-2.7',
     kdaDeltaDir: 'down',
-    dpmScore: '60.2',
-    dpmDelta: '+5.1',
-    dpmDeltaDir: 'up',
+    gdScore: '61.4',
+    gdDelta: '+4.2',
+    gdDeltaDir: 'up',
     kp: '0.5',
     kpDelta: '-0.0',
     kpDeltaDir: 'flat',
@@ -43,7 +43,7 @@ export const MOCK_PROFILE = {
   // sparkline data for each stat
   sparklines: {
     kda:        [2.1, 2.6, 2.4, 3.0, 2.9, 3.3, 3.1],
-    dpmScore:   [52, 55, 58, 57, 60, 60.2, 59],
+    gdScore:    [52, 55, 58, 57, 60, 61.4, 59],
     kp:         [0.48, 0.52, 0.50, 0.53, 0.51, 0.50, 0.50],
     csm:        [5.4, 5.6, 5.8, 5.9, 6.1, 6.0, 6.0],
     vision:     [0.9, 0.8, 0.9, 0.7, 0.8, 0.7, 0.7],
@@ -172,7 +172,7 @@ export const MOCK_LIVE_GAME = {
     { teamId: 200, champion: 'Aatrox' },
   ],
   blue: [
-    mockLivePlayer(100, 'five fingers', 'EUW', 'Neeko', 'Master', 335, [4, 14], { isSelf: true, role: 'Mid', champGames: 14, champWr: 64.3, streak: 4, wins: 18, losses: 12 }),
+    mockLivePlayer(100, 'five fingers', 'EUW', 'Camille', 'Master', 335, [4, 12], { isSelf: true, role: 'Top', champGames: 14, champWr: 64.3, streak: 4, wins: 18, losses: 12 }),
     mockLivePlayer(100, 'BlueJungle', 'EUW', 'Ivern', 'Diamond I', 78, [4, 11], { role: 'Jungle', champGames: 8, champWr: 62.5, streak: 2 }),
     mockLivePlayer(100, 'BlueMid', 'EUW', 'Orianna', 'Master', 210, [4, 12], { role: 'Mid', champGames: 20, champWr: 55.0, streak: -3, last3: [false, false, false], dodge: true }),
     mockLivePlayer(100, 'BlueAdc', 'EUW', 'Jinx', 'Grandmaster', 412, [4, 7], { role: 'ADC', champGames: 11, champWr: 72.7, streak: 5 }),

@@ -1,0 +1,150 @@
+html.gd-overlay,
+html.gd-overlay body,
+html.gd-overlay #root {
+  background: transparent !important;
+  background-image: none !important;
+  overflow: hidden;
+}
+
+.ov-root { height: 100%; padding: 10px 8px 8px; }
+.ov-preview { pointer-events: none; max-width: 252px; }
+
+.ov-bench,
+.ov-wait {
+  position: relative;
+  background: rgba(28, 36, 58, 0.82);
+  border-radius: 10px;
+  color: #fff;
+  backdrop-filter: blur(8px);
+}
+
+.ov-bench { padding: 18px 16px 14px; }
+.ov-bench.is-edit,
+.ov-wait.is-edit {
+  outline: 1px solid rgba(124, 92, 255, 0.9);
+  box-shadow: 0 0 0 2px rgba(124, 92, 255, 0.28);
+  cursor: move;
+  -webkit-app-region: drag;
+}
+
+.ov-tab {
+  position: absolute;
+  top: -11px;
+  left: 10px;
+  background: rgba(48, 58, 88, 0.95);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  padding: 3px 10px 4px;
+  border-radius: 3px 3px 0 0;
+  -webkit-app-region: drag;
+}
+
+.ov-c {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  pointer-events: none;
+}
+.ov-c--tl { top: -1px; left: -1px; border-top: 2px solid rgba(210, 220, 255, 0.7); border-left: 2px solid rgba(210, 220, 255, 0.7); }
+.ov-c--tr { top: -1px; right: -1px; border-top: 2px solid rgba(210, 220, 255, 0.7); border-right: 2px solid rgba(210, 220, 255, 0.7); }
+.ov-c--bl { bottom: -1px; left: -1px; border-bottom: 2px solid rgba(210, 220, 255, 0.7); border-left: 2px solid rgba(210, 220, 255, 0.7); }
+.ov-c--br { bottom: -1px; right: -1px; border-bottom: 2px solid rgba(210, 220, 255, 0.7); border-right: 2px solid rgba(210, 220, 255, 0.7); }
+
+.ov-drag {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  -webkit-app-region: drag;
+  user-select: none;
+}
+.ov-mark {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 7px;
+  font-weight: 800;
+  background: linear-gradient(135deg, #7c5cff, #ffb454);
+  color: #0b0c12;
+}
+.ov-brand {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+.ov-close {
+  margin-left: auto;
+  -webkit-app-region: no-drag;
+  border: none;
+  background: transparent;
+  color: rgba(255,255,255,0.4);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+}
+.ov-close:hover { color: #fff; }
+
+.ov-rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.ov-rows li {
+  display: grid;
+  grid-template-columns: 1fr auto auto auto;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 13px;
+}
+.ov-label { font-weight: 600; letter-spacing: 0.04em; }
+.ov-now {
+  font-family: var(--gd-font-mono), 'JetBrains Mono', monospace;
+  font-weight: 700;
+  min-width: 2.6em;
+  text-align: right;
+}
+.ov-now.is-low { color: #ff4d57; }
+.ov-now.is-ok { color: #3ecf8e; }
+.ov-sep { color: rgba(255,255,255,0.28); }
+.ov-tgt {
+  font-family: var(--gd-font-mono), 'JetBrains Mono', monospace;
+  color: rgba(210, 220, 240, 0.55);
+  font-weight: 600;
+  min-width: 2.6em;
+  text-align: right;
+}
+
+.ov-wait {
+  padding: 22px 16px 14px;
+  -webkit-app-region: drag;
+}
+.ov-wait p { margin: 8px 0 10px; font-size: 12px; color: rgba(255,255,255,0.7); }
+.ov-wait button {
+  -webkit-app-region: no-drag;
+  border: none;
+  background: rgba(255,255,255,0.08);
+  color: #fff;
+  border-radius: 8px;
+  padding: 6px 10px;
+  cursor: pointer;
+}
+.ov-hint {
+  margin: 10px 0 0;
+  font-size: 10px;
+  line-height: 1.35;
+  color: #ffd76b;
+}
+.ov-edit-hint {
+  margin: 10px 0 0;
+  font-size: 10px;
+  line-height: 1.35;
+  color: #c4b5ff;
+  -webkit-app-region: drag;
+}

@@ -2,8 +2,10 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { getSummonerDashboard } from '../services/riotApi';
 import { ChampionIcon } from '../components/GameIcons';
+import RoleIcon from '../components/RoleIcon';
 import MatchReview from '../components/MatchReview';
-import { parsePlayerSearch } from '../lib/playerRoute';
+import { parsePlayerSearch, parseRiotId } from '../lib/playerRoute';
+import { apiUserMessage, noticeFromError } from '../lib/apiNotice';
 import { MODE_KEYS, MODE_LABEL, MODE_QUEUE } from '../lib/queues';
 import { useSession } from '../state/SessionContext';
 import './History.css';
@@ -22,10 +24,11 @@ export default function History() {
   const [mode, setMode] = useState('Solo');
   const [review, setReview] = useState(null);
 
-  const lookup = {
+  const sessionLookup = {
     region: session?.region || 'europe',
     platform: session?.platform || 'euw1',
   };
+  const reviewPlatform = profile?.platform || sessionLookup.platform;
 
   const load = async (riotId, selectedMode = mode) => {
     if (!riotId) {
@@ -36,19 +39,26 @@ export default function History() {
     }
     setLoading(true);
     setError('');
-    const [gameName, tagLine] = riotId.split('#');
+    const parsed = parseRiotId(riotId, session?.tagLine || '');
+    if (!parsed) {
+      setProfile(null);
+      setError('Use Name#TAG — for example Ana de Armas#7589.');
+      setLoading(false);
+      return;
+    }
     try {
       const data = await getSummonerDashboard({
-        gameName,
-        tagLine: tagLine || session?.tagLine || 'EUW',
-        region: lookup.region,
-        platform: lookup.platform,
+        gameName: parsed.gameName,
+        tagLine: parsed.tagLine,
+        region: sessionLookup.region,
+        platform: sessionLookup.platform,
         queue: MODE_QUEUE[selectedMode],
         count: 40,
       });
       setProfile(data);
     } catch (err) {
-      setError(err?.message || 'Could not load match history.');
+      noticeFromError(err);
+      setError(apiUserMessage(err) || 'Could not load match history.');
       setProfile(null);
     } finally {
       setLoading(false);
@@ -67,7 +77,11 @@ export default function History() {
       <header className="hs-head">
         <div>
           <h1>Match History</h1>
-          <p>{activeId ? `${activeId} · ${games.length} ${MODE_LABEL[mode].toLowerCase()} games` : 'Link an account to browse match history.'}</p>
+          <p>
+            {activeId
+              ? `${activeId} · ${profile?.region || ''} · ${loading ? 'loading' : `${games.length} ${MODE_LABEL[mode].toLowerCase()} games`}`
+              : 'Link an account to browse match history.'}
+          </p>
         </div>
         <div className="hs-filters">
           {MODE_KEYS.map((m) => (
@@ -106,13 +120,18 @@ export default function History() {
             >
               <span className={`hs-result ${g.win ? 'win' : 'loss'}`}>{g.win ? 'WIN' : 'LOSS'}</span>
               <ChampionIcon name={g.champion} size={40} className="hs-champ" />
+              <span className="hs-role">{g.role ? <RoleIcon role={g.role} size={16} /> : null}</span>
               <div className="hs-mid">
                 <div className="hs-champ-name">{g.champion}</div>
-                <div className="hs-meta">{g.queueLabel || g.queueType} · {g.ago}</div>
+                <div className="hs-meta">{g.queueLabel || g.queueType} · {g.region || ''} · {g.ago}</div>
               </div>
               <div className="hs-kda">
                 <strong>{g.kills}/{g.deaths}/{g.assists}</strong>
                 <span>{g.kda} KDA</span>
+              </div>
+              <div className="hs-gd">
+                <strong>{g.gdScore ?? '—'}</strong>
+                <span>GD</span>
               </div>
               <div className="hs-cs">
                 <strong>{g.cs}</strong>
@@ -128,7 +147,7 @@ export default function History() {
       {review && (
         <MatchReview
           game={review}
-          platform={lookup.platform}
+          platform={reviewPlatform}
           onClose={() => setReview(null)}
         />
       )}
