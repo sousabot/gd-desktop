@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>GD Esports Desktop</title>
+  <title>Rift.lol</title>
   <link rel="icon" href="./icon.png" />
   <meta name="description" content="Windows desktop app for League of Legends stats: dashboard, live scouting, match history, champion pool, and player compare." />
   <link rel="stylesheet" href="./styles.css" />
@@ -12,8 +12,8 @@
   <div class="wrap">
     <nav class="nav">
       <a class="brand" href="./index.html">
-        <span class="mark">GD</span>
-        <strong>GD Esports</strong>
+        <span class="mark" aria-hidden="true"></span>
+        <strong>Rift.lol</strong>
       </a>
       <div class="nav-links">
         <a href="#features">Features</a>
@@ -28,7 +28,7 @@
       <div class="kicker">League of Legends · Windows</div>
       <h1>Your ranked games,<br>read like a review.</h1>
       <p class="lead">
-        GD Esports Desktop is a local Windows app for players who want ranked context:
+        Rift.lol is a local Windows app for players who want ranked context:
         live scouting, post-game recap, champion pool, and match history — linked to your own Riot ID.
       </p>
       <div class="cta" id="download">
@@ -42,7 +42,7 @@
     <div class="window" aria-hidden="true">
       <div class="window-bar">
         <span class="dot"></span>
-        GD Esports Desktop
+        Rift.lol
       </div>
       <div class="window-body">
         <aside class="side">
@@ -91,7 +91,7 @@
     </section>
 
     <p class="riot">
-      GD Esports Desktop isn't endorsed by Riot Games and doesn't reflect the views or opinions of Riot Games
+      Rift.lol isn't endorsed by Riot Games and doesn't reflect the views or opinions of Riot Games
       or anyone officially involved in producing or managing League of Legends.
       League of Legends and Riot Games are trademarks or registered trademarks of Riot Games, Inc.
     </p>
@@ -99,7 +99,7 @@
 
   <footer class="foot">
     <div class="wrap" style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;width:min(1080px, calc(100% - 40px));">
-      <span>© <span id="year"></span> GD Esports</span>
+      <span>© <span id="year"></span> Rift.lol</span>
       <span>
         <a href="./privacy.html">Privacy Policy</a> ·
         <a href="./terms.html">Terms of Service</a>
@@ -110,7 +110,7 @@
   <script src="./config.js"></script>
   <script>
     document.getElementById('year').textContent = new Date().getFullYear();
-    const cfg = window.GD_SITE || {};
+    const cfg = window.RIFT_SITE || {};
     const btn = document.getElementById('downloadBtn');
     const rel = document.getElementById('releasesBtn');
     const note = document.getElementById('downloadNote');
@@ -126,7 +126,7 @@
       });
       rel.addEventListener('click', (e) => {
         e.preventDefault();
-        alert('Set window.GD_SITE.github in site/config.js to yourname/repo.');
+        alert('Set window.RIFT_SITE.github in site/config.js to yourname/repo.');
       });
     }
   </script>

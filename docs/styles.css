@@ -37,9 +37,8 @@ img { max-width: 100%; }
 .brand { display: flex; align-items: center; gap: 10px; text-decoration: none; }
 .mark {
   width: 34px; height: 34px; border-radius: 9px;
-  display: grid; place-items: center;
-  font-family: var(--display); font-weight: 700; font-size: 12px; color: #0a0c17;
-  background: linear-gradient(135deg, var(--violet), var(--gold));
+  display: block; flex-shrink: 0;
+  background: #000 url('./icon.png') center/82% no-repeat;
 }
 .brand strong { font-family: var(--display); letter-spacing: 0.04em; }
 .nav-links { display: flex; gap: 18px; color: var(--muted); font-size: 14px; font-weight: 600; }
