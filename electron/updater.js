@@ -1,4 +1,5 @@
 const { app, ipcMain, shell } = require('electron');
+const fs = require('fs');
 
 const REPO = { owner: 'sousabot', repo: 'rift-desktop' };
 const RELEASES_API = `https://api.github.com/repos/${REPO.owner}/${REPO.repo}/releases/latest`;
@@ -30,6 +31,25 @@ function info() {
     portable: isPortable(),
     packaged: app.isPackaged,
   };
+}
+
+function looksBlocked(err) {
+  const m = String(err?.message || err || '').toLowerCase();
+  return /not signed|code signature|publisher|eperm|eacces|blocked|defender|smartscreen|virus|quarantine|operation not permitted|spawn unknown|errno:\s*-4048|checksum|sha512|enoent|cannot find downloaded/.test(m);
+}
+
+async function withReleaseLinks(payload) {
+  try {
+    const remote = await latestGithubRelease();
+    return {
+      ...payload,
+      url: remote.url,
+      setupUrl: remote.setupUrl,
+      portableUrl: remote.portableUrl,
+    };
+  } catch {
+    return { ...payload, url: RELEASES_PAGE };
+  }
 }
 
 async function latestGithubRelease() {
@@ -125,16 +145,19 @@ function register({ getWindow, prepareQuit }) {
   }
 
   updater.autoDownload = true;
-  updater.autoInstallOnAppQuit = true;
+  updater.autoInstallOnAppQuit = false;
   updater.allowPrerelease = false;
+  updater.verifyUpdateCodeSignature = async () => null;
   updater.setFeedURL({ provider: 'github', owner: REPO.owner, repo: REPO.repo });
 
   updater.on('checking-for-update', () => send({ state: 'checking', version: app.getVersion() }));
-  updater.on('update-available', (info) => send({
-    state: 'available',
-    version: info.version,
-    current: app.getVersion(),
-  }));
+  updater.on('update-available', (info) => {
+    withReleaseLinks({
+      state: 'available',
+      version: info.version,
+      current: app.getVersion(),
+    }).then(send).catch(() => {});
+  });
   updater.on('update-not-available', () => send({ state: 'current', version: app.getVersion() }));
   updater.on('download-progress', (progress) => send({
     state: 'downloading',
@@ -145,25 +168,50 @@ function register({ getWindow, prepareQuit }) {
     state: 'ready',
     version: info.version,
     current: app.getVersion(),
+    downloadedFile: info.downloadedFile || null,
   }));
-  updater.on('error', (err) => send({
-    state: 'error',
-    message: err?.message || 'Update failed.',
-  }));
+  updater.on('error', (err) => {
+    withReleaseLinks({
+      state: 'error',
+      blocked: looksBlocked(err),
+      message: err?.message || 'Update failed.',
+    }).then(send).catch(() => {
+      send({ state: 'error', blocked: looksBlocked(err), message: err?.message || 'Update failed.' });
+    });
+  });
 
   const check = async () => {
     try {
       await updater.checkForUpdates();
     } catch (err) {
-      send({ state: 'error', message: err.message || 'Could not check for updates.' });
+      send(await withReleaseLinks({
+        state: 'error',
+        blocked: looksBlocked(err),
+        message: err.message || 'Could not check for updates.',
+      }));
     }
     return last;
   };
 
+  const openSetup = async (file) => {
+    if (file && fs.existsSync(file)) {
+      const openErr = await shell.openPath(file);
+      if (!openErr) return true;
+    }
+    await shell.openExternal(last.setupUrl || last.url || RELEASES_PAGE);
+    return false;
+  };
+
   ipcMain.handle('update:check', () => check());
-  ipcMain.handle('update:install', () => {
+  ipcMain.handle('update:install', async () => {
     prepareQuit?.();
-    updater.quitAndInstall(false, true);
+    if (last.state === 'error' || last.state === 'available') {
+      await openSetup(last.downloadedFile);
+      return { ok: true };
+    }
+    const opened = await openSetup(last.downloadedFile);
+    if (!opened) return { ok: true };
+    app.quit();
     return { ok: true };
   });
 

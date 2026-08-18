@@ -20,8 +20,8 @@ export default function UpdateBanner() {
   let text = t('update.available', { version });
   let action = t('update.update');
   if (status.state === 'error') {
-    text = status.portable ? t('update.portable') : (status.message || t('update.fail'));
-    action = status.portable ? t('update.getSetup') : null;
+    text = status.portable ? t('update.portable') : (status.blocked ? t('update.blocked') : (status.message || t('update.fail')));
+    action = t('update.getSetup');
   } else if (status.state === 'downloading') {
     text = t('update.downloading', { version, percent: status.percent || 0 });
     action = null;
@@ -34,7 +34,7 @@ export default function UpdateBanner() {
   }
 
   const onClick = async () => {
-    if (status.portable) {
+    if (status.portable || status.state === 'error') {
       await window.riftUpdate.open(status.setupUrl || status.url);
       return;
     }

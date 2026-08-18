@@ -1,6 +1,6 @@
 {
   "name": "rift-desktop",
-  "version": "0.1.10",
+  "version": "0.1.11",
   "description": "Rift.lol desktop app — League stats dashboard",
   "author": {
     "name": "Rift.lol"
@@ -80,6 +80,7 @@
     "win": {
       "icon": "build/icon.ico",
       "signAndEditExecutable": false,
+      "verifyUpdateCodeSignature": false,
       "target": [
         {
           "target": "nsis",
