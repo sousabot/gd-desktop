@@ -1,6 +1,6 @@
-# GD Esports Desktop
+# RIFT.LOL Desktop
 
-A League of Legends stats tracker, styled like DPM.LOL with a GD Esports
+A League of Legends stats tracker, RIFT.LOL
 identity (violet + gold, Space Grotesk headers, mono stat numbers), built
 as an Electron + React (Vite) app.
 
