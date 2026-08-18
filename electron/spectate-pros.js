@@ -45,7 +45,7 @@ async function cargoJson(params) {
   const res = await fetch(`https://lol.fandom.com/api.php?${search.toString()}`, {
     headers: {
       Accept: 'application/json',
-      'User-Agent': 'RiftDesktop/0.1.9 (Leaguepedia cargo; spectate roster)',
+      'User-Agent': 'RiftDesktop/0.1.10 (Leaguepedia cargo; spectate roster)',
     },
     signal: AbortSignal.timeout(10000),
   });
@@ -60,7 +60,7 @@ async function wikiApi(params) {
   const res = await fetch(`https://lol.fandom.com/api.php?${search.toString()}`, {
     headers: {
       Accept: 'application/json',
-      'User-Agent': 'RiftDesktop/0.1.9 (Leaguepedia cargo; spectate roster)',
+      'User-Agent': 'RiftDesktop/0.1.10 (Leaguepedia cargo; spectate roster)',
     },
     signal: AbortSignal.timeout(10000),
   });

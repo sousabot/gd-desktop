@@ -947,19 +947,26 @@ async function leagueGameExe(creds) {
 
 function asList(value) {
   if (!value) return [];
-  if (Array.isArray(value)) return value;
-  if (Array.isArray(value.notifications)) return value.notifications;
+  if (Array.isArray(value)) return value.flatMap(asList);
+  if (typeof value !== 'object') return [];
+  if (Array.isArray(value.leagueNotifications)) return value.leagueNotifications.flatMap(asList);
+  if (Array.isArray(value.notifications)) return value.notifications.flatMap(asList);
+  if (value.notification && typeof value.notification === 'object') return asList(value.notification);
   return [value];
 }
 
 function noteFields(note) {
   if (!note || typeof note !== 'object') return null;
   const lp = Number(note.leaguePoints);
-  const lpDelta = Number(note.leaguePointsDelta);
+  const lpDelta = Number(
+    note.leaguePointsDelta ?? note.lpDelta ?? note.lpChange ?? note.leaguePointsChange,
+  );
+  const gameId = note.gameId ?? note.game_id ?? null;
   return {
     queueType: note.queueType || note.queue || null,
     tier: note.tier || null,
     division: note.division || note.rank || null,
+    gameId: gameId != null && String(gameId) ? String(gameId) : null,
     lp: Number.isFinite(lp) ? lp : null,
     lpDelta: Number.isFinite(lpDelta) ? lpDelta : null,
   };

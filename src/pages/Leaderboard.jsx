@@ -24,7 +24,10 @@ function splitRiotId(name = '', fallbackTag = '') {
 
 function gamesOf(row) { return (row.wins || 0) + (row.losses || 0); }
 function wrOf(row) { return Math.round((row.wins / Math.max(1, gamesOf(row))) * 100); }
-function kdaOf(row) { return row.kda != null && row.kda !== '' ? row.kda : '—'; }
+function kdaOf(row, pending) {
+  if (row.kda != null && row.kda !== '') return row.kda;
+  return pending ? '…' : '—';
+}
 function champsOf(row) {
   return (row.topChampions || []).slice(0, 4);
 }
@@ -92,7 +95,7 @@ function WinrateCell({ pct, wins, losses }) {
   );
 }
 
-function PodiumCard({ row, place, emblem, region }) {
+function PodiumCard({ row, place, emblem, region, hydrating }) {
   const { gameName, tagLine } = splitRiotId(row.summonerName, region);
   const wr = wrOf(row);
   const champs = champsOf(row);
@@ -126,7 +129,7 @@ function PodiumCard({ row, place, emblem, region }) {
       </div>
 
       <div className="lb-podium-foot">
-        <span className="lb-podium-kda">{kdaOf(row)} KDA</span>
+        <span className="lb-podium-kda">{kdaOf(row, hydrating)} KDA</span>
         <div className="lb-champs">
           {champs.map((c) => <ChampThumb key={c} name={c} size={28} />)}
         </div>
@@ -147,32 +150,39 @@ export default function Leaderboard() {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [enriching, setEnriching] = useState(false);
+  const [hydrating, setHydrating] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
     let cancelled = false;
+    setError('');
+    setRows([]);
     setLoading(true);
     setEnriching(false);
-    setError('');
+    setHydrating(true);
     getTopLeague({
       tier,
       platform,
       region,
-      onPartial: (data) => {
+      onPartial: (data, info) => {
         if (cancelled) return;
         setRows(Array.isArray(data) ? data : []);
         setLoading(false);
-        setEnriching(true);
+        const phase = info?.phase;
+        setHydrating(phase !== 'done');
+        setEnriching(phase === 'ladder' || phase === 'names');
       },
     }).then((data) => {
       if (cancelled) return;
       setRows(Array.isArray(data) ? data : []);
       setLoading(false);
       setEnriching(false);
+      setHydrating(false);
     }).catch((err) => {
       if (!cancelled) {
         setLoading(false);
         setEnriching(false);
+        setHydrating(false);
         setRows([]);
         setError(err?.message || 'Could not load this ladder.');
       }
@@ -263,7 +273,7 @@ export default function Leaderboard() {
           {top3.length > 0 && (
             <div className="lb-podium">
               {top3.map((r, i) => (
-                <PodiumCard key={r.puuid || r.rank} row={r} place={i + 1} emblem={img} region={regionTag} />
+                <PodiumCard key={r.puuid || r.rank} row={r} place={i + 1} emblem={img} region={regionTag} hydrating={hydrating} />
               ))}
             </div>
           )}
@@ -300,7 +310,7 @@ export default function Leaderboard() {
                         <RoleIcon role={r.role} size={18} />
                         <span>{r.role}</span>
                       </>
-                    ) : <span className="lb-muted">{enriching ? '…' : '—'}</span>}
+                    ) : <span className="lb-muted">{hydrating || enriching ? '…' : '—'}</span>}
                   </div>
 
                   <div className="lb-row-rank">
@@ -310,7 +320,7 @@ export default function Leaderboard() {
 
                   <WinrateCell pct={wr} wins={r.wins} losses={r.losses} />
 
-                  <div className="lb-kda-val">{kdaOf(r)}</div>
+                  <div className="lb-kda-val">{kdaOf(r, hydrating)}</div>
 
                   <div className="lb-champs">
                     {champsOf(r).map((c) => <ChampThumb key={c} name={c} size={26} />)}

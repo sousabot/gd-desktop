@@ -19,6 +19,7 @@ contextBridge.exposeInMainWorld('riotAPI', {
   getChampionMasteryBulk: (args) => ipcRenderer.invoke('riot:getChampionMasteryBulk', args),
   getChampionMasteries: (args) => ipcRenderer.invoke('riot:getChampionMasteries', args),
   getSeasonPeak: (args) => ipcRenderer.invoke('peak:seasonHigh', args),
+  getUggMatchLp: (args) => ipcRenderer.invoke('ugg:matchLp', args),
   getLastMatchIdsBulk: (args) => ipcRenderer.invoke('riot:getLastMatchIdsBulk', args),
   getTierList: (args) => ipcRenderer.invoke('riot:getTierList', args),
   onTierListProgress: (cb) => {

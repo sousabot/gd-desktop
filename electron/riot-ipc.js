@@ -428,9 +428,91 @@ module.exports = function registerRiotHandlers(ipcMain) {
     riotFetch(`https://${platform}.api.riotgames.com/lol/spectator/v5/active-games/by-summoner/${puuid}`)
   );
 
-  ipcMain.handle('riot:getTopLeague', (_e, { tier, queue = 'RANKED_SOLO_5x5', platform }) =>
-    riotFetch(`https://${platform}.api.riotgames.com/lol/league/v4/${tier}leagues/by-queue/${queue}`)
-  );
+  // Master league-v4 dumps up to 10k players through IPC — that's why the
+  // Master tab felt stuck on Challenger names. Limited fetches (leaderboard)
+  // use league-exp page 1 (~205 highest-LP entries) and cache for 5 minutes.
+  const LEAGUE_TTL_MS = 5 * 60 * 1000;
+  const LEADERBOARD_LIMIT = 50;
+  const leagueCache = new Map();
+
+  function slimLeagueEntries(entries, limit) {
+    const sorted = [...(entries || [])].sort((a, b) => (b.leaguePoints || 0) - (a.leaguePoints || 0));
+    const cut = Number.isFinite(limit) && limit > 0 ? sorted.slice(0, limit) : sorted;
+    return cut.map((e) => ({
+      puuid: e.puuid,
+      summonerId: e.summonerId,
+      leaguePoints: e.leaguePoints,
+      wins: e.wins,
+      losses: e.losses,
+    }));
+  }
+
+  async function loadLeagueEntries(tier, queue, platform, limited) {
+    const t = String(tier || 'challenger').toLowerCase();
+    const q = queue || 'RANKED_SOLO_5x5';
+    if (limited) {
+      try {
+        const page = await riotFetch(
+          `https://${platform}.api.riotgames.com/lol/league-exp/v4/entries/${q}/${t.toUpperCase()}/I?page=1`
+        );
+        if (Array.isArray(page) && page.length) return page;
+      } catch (err) {
+        console.warn(`[riot-ipc] league-exp ${t} failed, falling back to league-v4:`, err?.message || err);
+      }
+    }
+    const data = await riotFetch(
+      `https://${platform}.api.riotgames.com/lol/league/v4/${t}leagues/by-queue/${q}`
+    );
+    return Array.isArray(data?.entries) ? data.entries : [];
+  }
+
+  async function fetchTopLeague({ tier, queue = 'RANKED_SOLO_5x5', platform, limit, prefetch = true }) {
+    const t = String(tier || 'challenger').toLowerCase();
+    const q = queue || 'RANKED_SOLO_5x5';
+    const limited = Number.isFinite(limit) && limit > 0;
+    const key = `${platform}:${t}:${q}:${limited ? `top${limit}` : 'full'}`;
+    const hit = leagueCache.get(key);
+    if (hit?.data && Date.now() - hit.at < LEAGUE_TTL_MS) {
+      if (prefetch && limited) prefetchOtherLeagues(t, q, platform);
+      return hit.data;
+    }
+    if (hit?.inflight) return hit.inflight;
+
+    const inflight = loadLeagueEntries(t, q, platform, limited)
+      .then((entries) => {
+        const payload = { entries: slimLeagueEntries(entries, limited ? limit : undefined) };
+        leagueCache.set(key, { at: Date.now(), data: payload });
+        return payload;
+      })
+      .finally(() => {
+        const cur = leagueCache.get(key);
+        if (cur) delete cur.inflight;
+      });
+
+    leagueCache.set(key, { ...(hit || {}), inflight });
+    if (prefetch && limited) prefetchOtherLeagues(t, q, platform);
+    return inflight;
+  }
+
+  function prefetchOtherLeagues(exceptTier, queue, platform) {
+    const stamp = `${platform}:${queue}`;
+    if (leagueCache.get(`prefetch:${stamp}`)) return;
+    leagueCache.set(`prefetch:${stamp}`, { at: Date.now(), data: true });
+    setTimeout(() => {
+      ['challenger', 'grandmaster', 'master'].forEach((t) => {
+        if (t === exceptTier) return;
+        fetchTopLeague({
+          tier: t,
+          queue,
+          platform,
+          limit: LEADERBOARD_LIMIT,
+          prefetch: false,
+        }).catch(() => {});
+      });
+    }, 20000);
+  }
+
+  ipcMain.handle('riot:getTopLeague', (_e, args) => fetchTopLeague(args || {}));
 
   // league-v4 entries no longer carry a usable summonerName — resolve real
   // Riot IDs (gameName#tagLine) from puuid via account-v1 instead. Cached on

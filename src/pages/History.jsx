@@ -11,6 +11,13 @@ import { useSession } from '../state/SessionContext';
 import { useI18n } from '../i18n/LocaleContext';
 import './History.css';
 
+function lpChangeLabel(game) {
+  const measured = Number.isFinite(Number(game.lpDelta)) && Number(game.lpDelta) !== 0;
+  const n = measured ? Number(game.lpDelta) : Number(game.lpDeltaEst);
+  if (!Number.isFinite(n) || n === 0) return '—';
+  return `${measured ? '' : '~'}${n > 0 ? '+' : ''}${Math.round(n)}`;
+}
+
 export default function History() {
   const { session } = useSession();
   const { t } = useI18n();
@@ -119,6 +126,7 @@ export default function History() {
               type="button"
               className={`hs-row hs-row--${g.win ? 'win' : 'loss'}`}
               onClick={() => setReview(g)}
+              aria-label={t('history.openMatch')}
             >
               <span className={`hs-result ${g.win ? 'win' : 'loss'}`}>{g.win ? 'WIN' : 'LOSS'}</span>
               <ChampionIcon name={g.champion} size={40} className="hs-champ" />
@@ -131,6 +139,12 @@ export default function History() {
                 <strong>{g.kills}/{g.deaths}/{g.assists}</strong>
                 <span>{g.kda} KDA</span>
               </div>
+              <div className={`hs-lp${(g.lpDelta || g.lpDeltaEst) > 0 ? ' is-up' : (g.lpDelta || g.lpDeltaEst) < 0 ? ' is-down' : ''}${!g.lpDelta && g.lpDeltaEst ? ' is-est' : ''}`}>
+                <strong title={!g.lpDelta && g.lpDeltaEst ? t('dash.lpEstHint') : undefined}>
+                  {lpChangeLabel(g)}
+                </strong>
+                <span>LP</span>
+              </div>
               <div className="hs-rift">
                 <strong>{g.gdScore ?? '—'}</strong>
                 <span>Rift</span>
@@ -140,6 +154,7 @@ export default function History() {
                 <span>CS</span>
               </div>
               <div className="hs-dur">{g.durationMin}:{String(g.durationSec || 0).padStart(2, '0')}</div>
+              <span className="hs-chevron" aria-hidden>›</span>
             </button>
           ))}
           {!games.length && <div className="hs-empty">No games in this queue yet.</div>}

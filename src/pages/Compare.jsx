@@ -7,35 +7,10 @@ import { ChampionIcon } from '../components/GameIcons';
 import { parseRiotId, playerSearchPath } from '../lib/playerRoute';
 import { apiUserMessage, noticeFromError } from '../lib/apiNotice';
 import { displayPeakShort, formatMmr, mergePeakRank, mmrToRank, rankSnapshot } from '../lib/rankMmr';
+import { rankColor, rankImg } from '../lib/rankEmblem';
 import { profileIconUrl, useDdragonVersion } from '../services/ddragon';
 import { GD_SCORE_HINT } from '../lib/gdScore';
 import './Compare.css';
-import CHALLENGER_IMG from '../assets/ranks/CHALLENGER.webp';
-import GRANDMASTER_IMG from '../assets/ranks/GRANDMASTER_SMALL.webp';
-import MASTER_IMG from '../assets/ranks/MASTER.webp';
-import DIAMOND_IMG from '../assets/ranks/DIAMOND.webp';
-import EMERALD_IMG from '../assets/ranks/EMERALD.webp';
-
-const RANK_COLORS = {
-  IRON: '#8a8a8a', BRONZE: '#cd7f32', SILVER: '#9fb3c8', GOLD: '#e0b256',
-  PLATINUM: '#4fd7c5', EMERALD: '#3ecf8e', DIAMOND: '#5ba2ff',
-  MASTER: '#a06bff', GRANDMASTER: '#ff5c68', CHALLENGER: '#ffd76b',
-};
-const RANK_IMGS = {
-  CHALLENGER: CHALLENGER_IMG,
-  GRANDMASTER: GRANDMASTER_IMG,
-  MASTER: MASTER_IMG,
-  DIAMOND: DIAMOND_IMG,
-  EMERALD: EMERALD_IMG,
-  PLATINUM: EMERALD_IMG,
-};
-
-function rankColor(label) {
-  return RANK_COLORS[(label || '').split(' ')[0].toUpperCase()] || '#7c5cff';
-}
-function rankImg(label) {
-  return RANK_IMGS[(label || '').split(' ')[0].toUpperCase()] || null;
-}
 
 function num(value) {
   if (value == null || value === '—') return null;

@@ -67,7 +67,8 @@ function getItemJson() {
 function itemNameRank(id, item) {
   const n = Number(id);
   const onSr = item?.maps?.['11'] === true && n < 10000;
-  if (onSr && item.inStore !== false) return 4;
+  const live = item?.inStore !== false;
+  if (onSr && live) return 4;
   if (onSr) return 3;
   if (item?.maps?.['11'] === true) return 2;
   if (n < 10000) return 1;
@@ -79,6 +80,7 @@ export function getItemNameIndex() {
     const byName = {};
     const rankByKey = {};
     Object.entries(data.data || {}).forEach(([id, item]) => {
+      if (item?.inStore === false) return;
       const name = String(item.name || '').trim().toLowerCase();
       if (!name) return;
       const num = Number(id);
@@ -103,6 +105,8 @@ export function getItemCatalog() {
         name: item.name || '',
         from: (item.from || []).map(Number).filter((n) => n > 0),
         tags: item.tags || [],
+        gold: Number(item.gold?.total) || 0,
+        purchasable: item.inStore !== false && item.maps?.['11'] !== false,
       };
     });
     return map;

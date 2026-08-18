@@ -1,8 +1,10 @@
 import React, { useEffect, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { ChampionIcon, ItemIcon, RuneIcon, SpellIcon } from './GameIcons';
 import { platformLabel, useItemCatalog } from '../services/ddragon';
 import { useI18n } from '../i18n/LocaleContext';
 import { pickMatchStory } from '../lib/matchStory';
+import { playerQuery } from '../lib/playerRoute';
 import './MatchReview.css';
 
 function fmtSigned(v) {
@@ -57,13 +59,65 @@ function groupBuild(purchases, catalog) {
   return [...completes, ...leftover].sort((a, b) => (a.atMs || 0) - (b.atMs || 0));
 }
 
+function RosterTeam({ label, players, side, onOpen, openLabel }) {
+  if (!players?.length) return null;
+  return (
+    <div className={`rift-review-roster-team is-${side}`}>
+      <div className="rift-review-label">{label}</div>
+      {players.map((p) => {
+        const canOpen = Boolean(p.gameName && p.tagLine && !p.isSelf);
+        return (
+          <div
+            key={`${p.puuid || p.riotId || p.champion}`}
+            className={`rift-review-player${p.isSelf ? ' is-self' : ''}`}
+          >
+            <ChampionIcon name={p.champion} size={28} />
+            <div className="rift-review-player-id">
+              <strong>{p.gameName || p.champion}</strong>
+              {p.tagLine ? <span>#{p.tagLine}</span> : null}
+            </div>
+            <span className="rift-review-player-kda">{p.kills}/{p.deaths}/{p.assists}</span>
+            {canOpen ? (
+              <button
+                type="button"
+                className="rift-review-open"
+                onClick={() => onOpen(p)}
+                aria-label={openLabel('review.openPlayer', { name: p.gameName })}
+              >
+                ›
+              </button>
+            ) : (
+              <span className="rift-review-open is-off" aria-hidden />
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 export default function MatchReview({ game, platform, kicker, onClose }) {
   const catalog = useItemCatalog();
   const { t } = useI18n();
+  const navigate = useNavigate();
   const rows = useMemo(
     () => (game ? groupBuild(purchasesOf(game), catalog) : []),
     [game, catalog],
   );
+  const roster = useMemo(() => {
+    const list = Array.isArray(game?.players) ? game.players : [];
+    const selfTeam = list.find((p) => p.isSelf)?.teamId;
+    return {
+      allies: list.filter((p) => (selfTeam != null ? p.teamId === selfTeam : p.win === game.win)),
+      enemies: list.filter((p) => (selfTeam != null ? p.teamId !== selfTeam : p.win !== game.win)),
+    };
+  }, [game]);
+
+  const openPlayer = (player) => {
+    if (!player?.gameName || !player?.tagLine || player.isSelf) return;
+    onClose?.();
+    navigate(`/history${playerQuery(`${player.gameName}#${player.tagLine}`)}`);
+  };
 
   useEffect(() => {
     if (!game) return undefined;
@@ -157,7 +211,7 @@ export default function MatchReview({ game, platform, kicker, onClose }) {
             </div>
           </div>
         )}
-        {(finals.length > 0 || game.spells || game.runes?.perks?.length || game.allyTeam?.length) && (
+        {(finals.length > 0 || game.spells || game.runes?.perks?.length || roster.allies.length || game.allyTeam?.length) && (
           <div className="rift-review-foot">
             {(finals.length > 0 || game.spells || game.runes?.perks?.length) && (
               <div className="rift-review-kit">
@@ -180,7 +234,24 @@ export default function MatchReview({ game, platform, kicker, onClose }) {
                 )}
               </div>
             )}
-            {(game.allyTeam?.length || game.enemyTeam?.length) ? (
+            {(roster.allies.length || roster.enemies.length) ? (
+              <div className="rift-review-roster">
+                <RosterTeam
+                  label={t('review.yourTeam')}
+                  players={roster.allies}
+                  side="ally"
+                  onOpen={openPlayer}
+                  openLabel={t}
+                />
+                <RosterTeam
+                  label={t('review.enemyTeam')}
+                  players={roster.enemies}
+                  side="enemy"
+                  onOpen={openPlayer}
+                  openLabel={t}
+                />
+              </div>
+            ) : (game.allyTeam?.length || game.enemyTeam?.length) ? (
               <div className="rift-review-teams">
                 <div className="rift-review-row">
                   {(game.allyTeam || []).slice(0, 5).map((c, i) => (

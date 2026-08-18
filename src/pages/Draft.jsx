@@ -16,7 +16,7 @@ import {
 } from '../lib/draftAdvice';
 import { typicalLane } from '../lib/champLane';
 import { refreshRunePages } from '../lib/runePages';
-import { getDdragonVersion, useRuneTrees, useRuneIndex, champSpellImgUrl, champPassiveImgUrl, champLoadingUrl, useItemNameIndex } from '../services/ddragon';
+import { getDdragonVersion, useRuneTrees, useRuneIndex, champSpellImgUrl, champPassiveImgUrl, champLoadingUrl, useItemNameIndex, useItemCatalog } from '../services/ddragon';
 import { getDraftPool } from '../services/riotApi';
 import { coreItemNames, buildItemNames, resolveItemId, keystoneId, timeAgo, treeId, itemsForKeystone, fetchProbuilds } from '../lib/probuilds';
 import { useSession } from '../state/SessionContext';
@@ -228,12 +228,6 @@ export default function Draft() {
     setRoleLocked(false);
   }, [you?.cellId, session?.inSelect, session?.source]);
 
-  useEffect(() => {
-    if (roleLocked) return;
-    const next = POS_FROM_LCU[you?.position];
-    if (next) setRole(next);
-  }, [you?.position, roleLocked]);
-
   const activeRole = role;
   const enemies = live ? (session.enemies || []).map((s) => enrichSeat(s, catalog)) : [];
   const allies = live ? (session.allies || []).map((s) => enrichSeat(s, catalog)) : [];
@@ -252,6 +246,17 @@ export default function Draft() {
 
   const lockedIn = live && Number(you?.championId) > 0;
   const banPhase = live && isBanPhase(session);
+
+  useEffect(() => {
+    if (roleLocked) return;
+    const next = POS_FROM_LCU[you?.position];
+    if (next) {
+      setRole(next);
+      return;
+    }
+    const fromChamp = typicalLane(youChamp?.key);
+    if (fromChamp) setRole(fromChamp);
+  }, [you?.position, youChamp?.key, roleLocked]);
 
   useEffect(() => {
     setFocusKey(null);
@@ -480,6 +485,7 @@ export default function Draft() {
 function ProbuildsList({ champion, role, hideEmpty = false }) {
   const { rows, status } = useProbuilds(champion, role);
   const itemsByName = useItemNameIndex();
+  const itemCatalog = useItemCatalog();
   const [openId, setOpenId] = useState(null);
   useEffect(() => { setOpenId(null); }, [champion, role]);
   if (!champion) return null;
@@ -487,10 +493,13 @@ function ProbuildsList({ champion, role, hideEmpty = false }) {
   const open = rows.find((row) => row.id === openId) || null;
 
   if (open) {
-    const items = buildItemNames(open.items).map((name) => ({
-      name,
-      id: resolveItemId(name, itemsByName),
-    }));
+    const items = buildItemNames(open.items)
+      .map((name) => {
+        const id = resolveItemId(name, itemsByName);
+        if (!id || itemCatalog[id]?.purchasable === false) return null;
+        return { name, id };
+      })
+      .filter(Boolean);
     const key = keystoneId(open.keystone);
     const primary = treeId(open.primary);
     const sub = treeId(open.secondary);
@@ -706,7 +715,16 @@ function Loadout({
 }) {
   const { rows, status } = useProbuilds(proChamp, activeRole);
   const itemsByName = useItemNameIndex();
+  const itemCatalog = useItemCatalog();
   const selectedBuild = itemsForKeystone(rows, runes?.selectedPerkIds?.[0]);
+  const liveItems = selectedBuild.items
+    .map((item) => {
+      const id = resolveItemId(item.name, itemsByName);
+      const meta = id ? itemCatalog[id] : null;
+      if (!id || meta?.purchasable === false) return null;
+      return { ...item, id, gold: meta?.gold || 0 };
+    })
+    .filter(Boolean);
 
   return (
     <>
@@ -742,8 +760,12 @@ function Loadout({
               const on = runes?.id === page.id;
               const pageBuild = itemsForKeystone(rows, page.selectedPerkIds?.[0]);
               const cores = pageBuild.items
-                .map((item) => ({ ...item, id: resolveItemId(item.name, itemsByName) }))
-                .filter((item) => item.id)
+                .map((item) => {
+                  const id = resolveItemId(item.name, itemsByName);
+                  if (!id || itemCatalog[id]?.purchasable === false) return null;
+                  return { ...item, id };
+                })
+                .filter(Boolean)
                 .slice(0, 4);
               return (
                 <button
@@ -803,26 +825,27 @@ function Loadout({
             {status === 'error' && !selectedBuild.hasResults ? (
               <p className="dr-empty">Leaguepedia didn’t answer for items.</p>
             ) : null}
-            {status !== 'loading' && status !== 'error' && !selectedBuild.hasResults ? (
-              <p className="dr-empty">No recent pro games on this champion.</p>
+            {status !== 'loading' && status !== 'error' && !liveItems.length ? (
+              <p className="dr-empty">
+                {selectedBuild.hasResults
+                  ? 'No current-patch items on those scoreboards.'
+                  : 'No recent pro games on this champion for this role.'}
+              </p>
             ) : null}
-            {selectedBuild.hasResults ? (
+            {liveItems.length ? (
               <>
                 <div className="dr-items">
-                  {selectedBuild.items.map((item) => {
-                    const id = resolveItemId(item.name, itemsByName);
-                    return (
+                  {liveItems.map((item) => (
                       <span key={item.name} className="dr-item" title={item.name}>
-                        <ItemIcon id={id} size={40} title={item.name} />
+                        <ItemIcon id={item.id} size={40} title={item.name} />
                         <em>{item.name}</em>
                         {selectedBuild.hasWins ? (
                           <b>{item.w}/{item.n}</b>
                         ) : (
-                          <b>{item.n}g</b>
+                          <b>{item.gold ? `${item.gold}g` : `${item.n}`}</b>
                         )}
                       </span>
-                    );
-                  })}
+                  ))}
                 </div>
                 <p className="dr-hint">
                   {selectedBuild.mixed

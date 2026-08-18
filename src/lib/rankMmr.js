@@ -46,8 +46,14 @@ export function mmrFromTierInfo(info, { missingLp = 0 } = {}) {
   return estimateRankMmr(info.tier, info.division, points == null ? missingLp : points);
 }
 
+function lobbyMmrValue(row) {
+  if (Number.isFinite(row)) return row;
+  if (row && Number.isFinite(row.mmr)) return row.mmr;
+  return null;
+}
+
 export function averageLobbyMmr(perGameMmrs = []) {
-  const vals = perGameMmrs.filter((n) => Number.isFinite(n));
+  const vals = (perGameMmrs || []).map(lobbyMmrValue).filter((n) => Number.isFinite(n));
   if (!vals.length) return null;
   let weight = 1;
   let weighted = 0;

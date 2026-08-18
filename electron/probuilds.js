@@ -7,10 +7,11 @@ function esc(value) {
   return String(value || '').replace(/"/g, '');
 }
 
-function cargoUrl({ champion, role }) {
-  const where = role
+function cargoUrl({ champion, role, since }) {
+  let where = role
     ? `Champion="${esc(champion)}" AND IngameRole="${esc(role)}" AND DateTime_UTC IS NOT NULL`
     : `Champion="${esc(champion)}" AND DateTime_UTC IS NOT NULL`;
+  if (since) where += ` AND DateTime_UTC >= "${esc(since)}"`;
   const params = new URLSearchParams({
     action: 'cargoquery',
     format: 'json',
@@ -55,12 +56,12 @@ function mapRows(payload) {
   }).filter((row) => row.player);
 }
 
-async function query(champion, role) {
-  const url = cargoUrl({ champion, role });
+async function query(champion, role, since) {
+  const url = cargoUrl({ champion, role, since });
   const res = await fetch(url, {
     headers: {
       Accept: 'application/json',
-      'User-Agent': 'RiftDesktop/0.1.9 (https://github.com/sousabot/rift-desktop; draft-probuilds)',
+      'User-Agent': 'RiftDesktop/0.1.10 (https://github.com/sousabot/rift-desktop; draft-probuilds)',
     },
     signal: AbortSignal.timeout(12000),
   });
@@ -70,17 +71,23 @@ async function query(champion, role) {
   return mapRows(json);
 }
 
+function sinceStamp(days) {
+  if (!days) return '';
+  return new Date(Date.now() - days * 86400000).toISOString().slice(0, 19).replace('T', ' ');
+}
+
 async function listProbuilds({ champion, role } = {}) {
   const name = String(champion || '').trim();
   if (!name) return { ok: true, rows: [] };
   const wikiRole = ROLE[role] || role || '';
-  const key = `${name}|${wikiRole}`;
+  const key = `${name}|${wikiRole}|55`;
   const hit = cache.get(key);
   if (hit && Date.now() - hit.at < TTL_MS) return hit.data;
 
   try {
-    let rows = wikiRole ? await query(name, wikiRole) : [];
-    if (!rows.length) rows = await query(name, '');
+    const recent = sinceStamp(55);
+    let rows = wikiRole ? await query(name, wikiRole, recent) : await query(name, '', recent);
+    if (!rows.length && wikiRole) rows = await query(name, wikiRole, '');
     const data = { ok: true, rows, source: 'Leaguepedia' };
     cache.set(key, { at: Date.now(), data });
     return data;

@@ -80,7 +80,9 @@ async function fetchLobbyMmrs({ region, puuid, flex = false }) {
     if (!games.length) break;
     for (const game of games) {
       const mmr = lobbyMmrFromGame(game, puuid);
-      if (mmr != null) out.push(mmr);
+      if (mmr == null) continue;
+      const at = Date.parse(game.created_at || '') || 0;
+      out.push({ mmr, at });
     }
     endedAt = json?.meta?.last_game_created_at || games[games.length - 1]?.created_at || '';
     if (!endedAt || games.length < 2) break;

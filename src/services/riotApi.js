@@ -4,6 +4,7 @@ import { gdScoreFromParticipant } from '../lib/gdScore';
 import { roleFromChampions } from '../lib/champLane';
 import { estimateRankMmr, resolveEstimatedMmr } from '../lib/rankMmr';
 import { loadOpggRankContext } from '../lib/seasonPeak';
+import { attachEstimatedLp, applyTrackedLp, syncMatchLp } from '../lib/lpHistory';
 
 const hasBridge = typeof window !== 'undefined' && !!window.riotAPI;
 
@@ -93,6 +94,13 @@ async function loadSummonerDashboard({ gameName, tagLine, region, platform, queu
       flex: queue === 440,
       riotId: `${account.gameName}#${account.tagLine}`,
     }).catch(() => null);
+    const uggLpPromise = (queue === 420 || queue === 440) && window.riotAPI?.getUggMatchLp
+      ? window.riotAPI.getUggMatchLp({
+          riotId: `${account.gameName}#${account.tagLine}`,
+          platform: resolvedPlatform,
+          queue,
+        }).catch(() => null)
+      : Promise.resolve(null);
 
     const [matches, timelines] = await Promise.all([
       window.riotAPI.getMatchesBulk({ matchIds, region: resolvedRegion }),
@@ -156,7 +164,7 @@ async function loadSummonerDashboard({ gameName, tagLine, region, platform, queu
       }
     }
 
-    const rankContext = await rankContextPromise;
+    const [rankContext, trackedLp] = await Promise.all([rankContextPromise, uggLpPromise]);
     return await normalizeDashboard({
       account, summoner, ranked, matches, timelines, ladderRank,
       rankedUnknown,
@@ -165,6 +173,7 @@ async function loadSummonerDashboard({ gameName, tagLine, region, platform, queu
       queue,
       seasonPeak: rankContext?.peak || null,
       lobbyMmrs: rankContext?.lobbyMmrs || [],
+      trackedLp,
       collections: {
         played: Array.isArray(masteryResult) ? masteryResult.length : 0,
         total: champMeta.total || 0,
@@ -671,12 +680,25 @@ export async function getLiveGame({ gameName, tagLine, region = 'europe', platfo
 }
 
 const NAME_ICON_LIMIT = 50; // names + profile icons for the full table
-const MATCH_LIMIT = 10;     // last ranked game for KDA / confirmed role
 const GAMES_PER_PLAYER = 1;
-const MASTERY_CHUNK = 8;
+const ROLE_WAVE = 10; // last ranked game for a wave of players, then paint
+const TOP_LEAGUE_TTL_MS = 5 * 60 * 1000;
+const topLeagueJobs = new Map();
 
-function champNamesFromMastery(entry, champMeta) {
-  return (entry || []).map((mm) => champMeta.map[String(mm.championId)]).filter(Boolean);
+function leagueJobKey(platform, tier, queue) {
+  return `roles-v1:${platform}:${String(tier || 'challenger').toLowerCase()}:${queue}`;
+}
+
+function matchIdList(raw) {
+  const ids = Array.isArray(raw) ? raw : (raw ? [raw] : []);
+  return ids.filter(Boolean).slice(0, GAMES_PER_PLAYER);
+}
+
+function emitLeagueRows(job, rows, info) {
+  job.rows = rows;
+  job.listeners.forEach((fn) => {
+    try { fn(rows, info); } catch { /* ignore subscriber errors */ }
+  });
 }
 
 export async function getTopLeague({
@@ -685,82 +707,90 @@ export async function getTopLeague({
   platform = 'euw1',
   region = 'europe',
   onPartial,
+  silent = false,
 } = {}) {
   requireBridge();
+  const key = leagueJobKey(platform, tier, queue);
+  let job = topLeagueJobs.get(key);
+  if (!job) {
+    job = { rows: null, inflight: null, at: 0, complete: false, listeners: new Set() };
+    topLeagueJobs.set(key, job);
+  }
+  if (onPartial) job.listeners.add(onPartial);
+
   try {
-    const data = await window.riotAPI.getTopLeague({ tier, queue, platform });
-    const top = data.entries
+    if (job.rows) onPartial?.(job.rows);
+    const fresh = job.complete && Date.now() - job.at < TOP_LEAGUE_TTL_MS;
+    if (fresh && !job.inflight) return job.rows;
+
+    if (!job.inflight) {
+      job.inflight = loadTopLeague({
+        tier,
+        queue,
+        platform,
+        region,
+        onPartial: (rows, info) => emitLeagueRows(job, rows, info),
+      }).then((rows) => {
+        emitLeagueRows(job, rows, { phase: 'done' });
+        job.complete = true;
+        job.at = Date.now();
+        return rows;
+      }).finally(() => {
+        job.inflight = null;
+      });
+    }
+    return await job.inflight;
+  } catch (err) {
+    if (!silent) {
+      console.error('[riotApi] Leaderboard failed:', err);
+      noticeFromError(err);
+    }
+    throw err;
+  } finally {
+    if (onPartial) job.listeners.delete(onPartial);
+  }
+}
+
+async function loadTopLeague({
+  tier,
+  queue,
+  platform,
+  region,
+  onPartial,
+}) {
+    const data = await window.riotAPI.getTopLeague({ tier, queue, platform, limit: NAME_ICON_LIMIT });
+    const top = (data?.entries || [])
       .sort((a, b) => b.leaguePoints - a.leaguePoints)
       .slice(0, NAME_ICON_LIMIT);
 
-    const iconPuuids = top.map((e) => e.puuid);
-    const matchPuuids = top.slice(0, MATCH_LIMIT).map((e) => e.puuid);
+    let rows = top.map((e, i) => ({
+      rank: i + 1,
+      puuid: e.puuid,
+      summonerName: e.puuid?.slice(0, 8) ?? 'Unknown',
+      profileIconId: null,
+      profileIconUrl: null,
+      role: null,
+      kda: null,
+      topChampions: [],
+      lp: e.leaguePoints,
+      wins: e.wins,
+      losses: e.losses,
+    }));
+    onPartial?.(rows, { phase: 'ladder' });
 
-    const [accounts, champMeta, ddVersion] = await Promise.all([
+    const iconPuuids = top.map((e) => e.puuid);
+    const firstWave = iconPuuids.slice(0, ROLE_WAVE);
+
+    // Names + the first 10 last-games in parallel so roles start landing
+    // with the names instead of waiting on 50 mastery lookups first.
+    const [accounts, ddVersion, firstLists] = await Promise.all([
       window.riotAPI.getAccountsByPuuidsBulk({ puuids: iconPuuids, region }).catch((e) => {
         console.warn('[riotApi] Leaderboard name resolution failed, falling back to masked IDs:', e.message);
         return [];
       }),
-      getChampionMeta(),
       getDdragonVersion(),
-    ]);
-
-    let rows = top.map((e, i) => {
-      const acc = accounts[i];
-      return {
-        rank: i + 1,
-        puuid: e.puuid,
-        summonerName: acc ? `${acc.gameName}#${acc.tagLine}` : (e.puuid?.slice(0, 8) ?? 'Unknown'),
-        profileIconId: null,
-        profileIconUrl: null,
-        role: null,
-        kda: null,
-        topChampions: [],
-        lp: e.leaguePoints,
-        wins: e.wins,
-        losses: e.losses,
-      };
-    });
-    onPartial?.(rows);
-
-    for (let i = 0; i < iconPuuids.length; i += MASTERY_CHUNK) {
-      const slice = iconPuuids.slice(i, i + MASTERY_CHUNK);
-      const masteries = await window.riotAPI.getChampionMasteryBulk({ puuids: slice, platform }).catch((e) => {
-        console.warn('[riotApi] Leaderboard mastery fallback failed:', e.message);
-        return [];
-      });
-      rows = rows.map((row, idx) => {
-        if (idx < i || idx >= i + slice.length) return row;
-        const names = champNamesFromMastery(masteries[idx - i], champMeta);
-        if (!names.length) return row;
-        return {
-          ...row,
-          role: roleFromChampions(names) || row.role,
-          topChampions: names.slice(0, 4),
-        };
-      });
-      onPartial?.(rows);
-    }
-
-    const summoners = await window.riotAPI.getSummonersByPuuidsBulk({ puuids: iconPuuids, platform }).catch((e) => {
-      console.warn('[riotApi] Leaderboard icon resolution failed:', e.message);
-      return [];
-    });
-    const withIcons = rows.map((row, i) => {
-      const summ = summoners[i];
-      return {
-        ...row,
-        profileIconId: summ?.profileIconId ?? null,
-        profileIconUrl: summ?.profileIconId != null
-          ? `https://ddragon.leagueoflegends.com/cdn/${ddVersion}/img/profileicon/${summ.profileIconId}.png`
-          : null,
-      };
-    });
-    onPartial?.(withIcons);
-
-    const [recentMatchIdLists] = await Promise.all([
       window.riotAPI.getLastMatchIdsBulk({
-        puuids: matchPuuids,
+        puuids: firstWave,
         region,
         queue: 420,
         count: GAMES_PER_PLAYER,
@@ -770,50 +800,93 @@ export async function getTopLeague({
       }),
     ]);
 
-    const idsByPlayer = matchPuuids.map((_, i) => {
-      const raw = recentMatchIdLists[i];
-      const ids = Array.isArray(raw) ? raw : (raw ? [raw] : []);
-      return ids.filter(Boolean).slice(0, GAMES_PER_PLAYER);
+    rows = top.map((e, i) => {
+      const acc = accounts[i];
+      const prev = rows[i];
+      return {
+        ...prev,
+        summonerName: acc ? `${acc.gameName}#${acc.tagLine}` : (e.puuid?.slice(0, 8) ?? 'Unknown'),
+      };
     });
+    onPartial?.(rows, { phase: 'names' });
 
-    const uniqueMatchIds = [];
-    const seen = new Set();
-    idsByPlayer.forEach((ids) => {
-      ids.forEach((id) => {
-        if (!seen.has(id)) {
-          seen.add(id);
-          uniqueMatchIds.push(id);
-        }
-      });
-    });
-
+    const matchPuuids = [];
+    const idsByPlayer = [];
     const matchById = {};
-    const CHUNK = 8;
-    for (let i = 0; i < uniqueMatchIds.length; i += CHUNK) {
-      const chunk = uniqueMatchIds.slice(i, i + CHUNK);
-      const batch = await window.riotAPI.getMatchesBulk({ matchIds: chunk, region }).catch(() => []);
-      (batch || []).forEach((m) => { if (m?.metadata?.matchId) matchById[m.metadata.matchId] = m; });
-      if (i + CHUNK < uniqueMatchIds.length) {
-        onPartial?.(mergeMatchStats(withIcons, top, idsByPlayer, matchById, matchPuuids));
+
+    const ingestWave = async (puuids, lists) => {
+      puuids.forEach((puuid, j) => {
+        matchPuuids.push(puuid);
+        idsByPlayer.push(matchIdList(lists[j]));
+      });
+      const needed = [];
+      const seen = new Set(Object.keys(matchById));
+      idsByPlayer.forEach((ids) => {
+        ids.forEach((id) => {
+          if (id && !seen.has(id)) {
+            seen.add(id);
+            needed.push(id);
+          }
+        });
+      });
+      const CHUNK = 8;
+      if (!needed.length) {
+        rows = mergeMatchStats(rows, top, idsByPlayer, matchById, matchPuuids);
+        onPartial?.(rows, { phase: 'roles' });
+        return;
       }
+      for (let i = 0; i < needed.length; i += CHUNK) {
+        const chunk = needed.slice(i, i + CHUNK);
+        const batch = await window.riotAPI.getMatchesBulk({ matchIds: chunk, region }).catch(() => []);
+        (batch || []).forEach((m) => { if (m?.metadata?.matchId) matchById[m.metadata.matchId] = m; });
+        rows = mergeMatchStats(rows, top, idsByPlayer, matchById, matchPuuids);
+        onPartial?.(rows, { phase: 'roles' });
+      }
+    };
+
+    await ingestWave(firstWave, firstLists);
+
+    const summonersPromise = window.riotAPI.getSummonersByPuuidsBulk({
+      puuids: iconPuuids,
+      platform,
+    }).catch((e) => {
+      console.warn('[riotApi] Leaderboard icon resolution failed:', e.message);
+      return [];
+    });
+
+    for (let i = ROLE_WAVE; i < iconPuuids.length; i += ROLE_WAVE) {
+      const slice = iconPuuids.slice(i, i + ROLE_WAVE);
+      const lists = await window.riotAPI.getLastMatchIdsBulk({
+        puuids: slice,
+        region,
+        queue: 420,
+        count: GAMES_PER_PLAYER,
+      }).catch(() => []);
+      await ingestWave(slice, lists);
     }
 
-    return mergeMatchStats(withIcons, top, idsByPlayer, matchById, matchPuuids);
-  } catch (err) {
-    console.error('[riotApi] Leaderboard failed:', err);
-    noticeFromError(err);
-    throw err;
-  }
+    const summoners = await summonersPromise;
+    rows = rows.map((row, i) => {
+      const summ = summoners[i];
+      return {
+        ...row,
+        profileIconId: summ?.profileIconId ?? null,
+        profileIconUrl: summ?.profileIconId != null
+          ? `https://ddragon.leagueoflegends.com/cdn/${ddVersion}/img/profileicon/${summ.profileIconId}.png`
+          : null,
+      };
+    });
+    onPartial?.(rows, { phase: 'done' });
+    return rows;
 }
 
-function mergeMatchStats(rows, top, idsByPlayer, matchById, matchPuuids) {
+function mergeMatchStats(rows, _top, idsByPlayer, matchById, matchPuuids) {
   const indexByPuuid = {};
   matchPuuids.forEach((id, i) => { indexByPuuid[id] = i; });
 
   return rows.map((row) => {
     const slot = indexByPuuid[row.puuid];
     if (slot == null) return row;
-    const e = top[slot];
     const ids = idsByPlayer[slot] || [];
     const champCounts = {};
     const roleCounts = {};
@@ -821,7 +894,7 @@ function mergeMatchStats(rows, top, idsByPlayer, matchById, matchPuuids) {
 
     ids.forEach((id) => {
       const match = matchById[id];
-      const self = match?.info?.participants?.find((pp) => pp.puuid === e.puuid);
+      const self = match?.info?.participants?.find((pp) => pp.puuid === row.puuid);
       if (!self) return;
       games += 1;
       kills += Number(self.kills) || 0;
@@ -1031,6 +1104,7 @@ async function normalizeDashboard({
   platform = 'euw1', queue = 420, collections = { played: 0, total: 0 }, skipDeltas = false,
   seasonPeak = null,
   lobbyMmrs = [],
+  trackedLp = null,
 }) {
   const rankedList = Array.isArray(ranked) ? ranked : [];
   const rankedInfo = rankedUnknown
@@ -1082,6 +1156,23 @@ async function normalizeDashboard({
     const damageShare = teamDamage ? damage / teamDamage : null;
     const purchases = itemPurchases(timelines[idx], p.participantId);
     const gdScore = gdScoreFromParticipant(p, m);
+    const players = (m.info.participants || []).map((pp) => {
+      const gameName = pp.riotIdGameName || pp.gameName || '';
+      const tagLine = pp.riotIdTagline || pp.tagLine || '';
+      return {
+        puuid: pp.puuid,
+        gameName,
+        tagLine,
+        riotId: gameName && tagLine ? `${gameName}#${tagLine}` : '',
+        champion: pp.championName,
+        teamId: pp.teamId,
+        win: !!pp.win,
+        isSelf: pp.puuid === puuid,
+        kills: pp.kills,
+        deaths: pp.deaths,
+        assists: pp.assists,
+      };
+    });
 
     return {
       matchId:      m.metadata.matchId,
@@ -1095,6 +1186,7 @@ async function normalizeDashboard({
       durationSec:  Math.round(m.info.gameDuration % 60),
       kda,
       ago:          timeAgo(m.info.gameEndTimestamp),
+      endedAt:      m.info.gameEndTimestamp || null,
       gdScore,
       lp:           gdScore,
       role:         ROLE_LABELS[p.teamPosition] || ROLE_LABELS[p.individualPosition] || null,
@@ -1120,6 +1212,7 @@ async function normalizeDashboard({
       csm:          p.totalMinionsKilled + p.neutralMinionsKilled,
       allyTeam,
       enemyTeam,
+      players,
       allyBans: teamBans(m, p.teamId),
       enemyBans: teamBans(m, p.teamId === 200 ? 100 : 200),
       items: [p.item0, p.item1, p.item2, p.item3, p.item4, p.item5, p.item6],
@@ -1183,6 +1276,34 @@ async function normalizeDashboard({
   const lensSeries = recentGames.map((g) => Math.max(0, Math.min(100, 100 - g.deaths * 8))).reverse();
 
   const riotId = `${account.gameName}#${account.tagLine}`;
+  const lpMode = queue === 440 ? 'Flex' : queue === 420 ? 'Solo' : null;
+  const hiddenMmr = resolveEstimatedMmr({
+    visibleMmr: rankedInfo.estMmr,
+    wins: rankedInfo.wins,
+    losses: rankedInfo.losses,
+    lobbyMmrs,
+  });
+  const synced = lpMode
+    ? syncMatchLp({
+        riotId,
+        mode: lpMode,
+        lp: rankedInfo.lp,
+        tier: rankedInfo.rankTier,
+        division: rankedInfo.rankDivision,
+        games: recentGames,
+        queueId: queue,
+      })
+    : recentGames;
+  const trackedGames = lpMode
+    ? applyTrackedLp(synced, trackedLp, riotId, lpMode)
+    : synced;
+  const gamesOut = lpMode
+    ? attachEstimatedLp(trackedGames, {
+        visibleMmr: rankedInfo.estMmr,
+        hiddenMmr,
+        lobbyMmrs,
+      })
+    : trackedGames;
   const deltas = skipDeltas ? flatDeltas() : await computeWeeklyDeltas(riotId, {
     kda: kdaVal, gdScore: gdScoreVal, kp: kpVal, csm: csPerMin,
     visionScore: visionVal, gpm: gpmVal, goldDiff15: gd15Val, kaDiff15: ka15Val,
@@ -1199,12 +1320,7 @@ async function normalizeDashboard({
     rank:          rankedInfo.rank,
     ladderRank,
     lp:            rankedInfo.lp,
-    estMmr:        resolveEstimatedMmr({
-      visibleMmr: rankedInfo.estMmr,
-      wins: rankedInfo.wins,
-      losses: rankedInfo.losses,
-      lobbyMmrs,
-    }),
+    estMmr:        hiddenMmr,
     rankTier:      rankedInfo.rankTier,
     rankDivision:  rankedInfo.rankDivision,
     wins:          rankedInfo.wins,
@@ -1232,7 +1348,7 @@ async function normalizeDashboard({
       kaDiff15:   recentGames.map((g) => g.kaDiff15 ?? 0),
     },
     lastGame: last,
-    recentGames,
+    recentGames: gamesOut,
     championPool,
     championPerformance,
     collections,

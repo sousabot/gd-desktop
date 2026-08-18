@@ -6,7 +6,7 @@
 }
 .rift-review-modal {
   position: relative;
-  width: min(520px, 100%);
+  width: min(640px, 100%);
   max-height: min(88vh, 820px);
   overflow: hidden;
   background: #12121b;
@@ -135,8 +135,52 @@
 .rift-review-runes {
   display: flex; align-items: center; gap: 5px;
 }
-.rift-review-teams {
-  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+.rift-review-roster {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.rift-review-roster-team { min-width: 0; }
+.rift-review-player {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) auto 22px;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 0;
+}
+.rift-review-player.is-self { background: rgba(255,215,107,0.08); border-radius: 8px; padding: 5px 6px; }
+.rift-review-player-id { min-width: 0; }
+.rift-review-player-id strong {
+  display: block;
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.rift-review-player-id span {
+  font-size: 10px;
+  color: var(--rift-text-faint);
+}
+.rift-review-player-kda {
+  font-family: var(--rift-font-mono);
+  font-size: 11px;
+  color: var(--rift-text-muted);
+  white-space: nowrap;
+}
+.rift-review-open {
+  width: 22px; height: 22px;
+  border: none;
+  border-radius: 6px;
+  background: rgba(91,162,255,0.18);
+  color: #cfe3ff;
+  font-size: 18px; line-height: 1; font-weight: 700;
+  cursor: pointer;
+}
+.rift-review-open:hover { background: rgba(91,162,255,0.32); color: #fff; }
+.rift-review-open.is-off { background: transparent; }
+
+@media (max-width: 640px) {
+  .rift-review-roster { grid-template-columns: 1fr; }
 }
 .rift-review-row { display: flex; gap: 4px; }
 .rift-review-vs {

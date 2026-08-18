@@ -14,20 +14,8 @@ import { useI18n } from '../i18n/LocaleContext';
 import { SPECTATE_DELAY_SEC, fmtClock, spectateWaitSec } from '../lib/spectateDelay';
 import RoleIcon from '../components/RoleIcon';
 import { padTeamBans } from '../lib/bans';
+import { rankImg } from '../lib/rankEmblem';
 import './LiveStatus.css';
-import CHALLENGER_IMG  from '../assets/ranks/CHALLENGER.webp';
-import GRANDMASTER_IMG from '../assets/ranks/GRANDMASTER_SMALL.webp';
-import MASTER_IMG      from '../assets/ranks/MASTER.webp';
-import DIAMOND_IMG     from '../assets/ranks/DIAMOND.webp';
-import EMERALD_IMG     from '../assets/ranks/EMERALD.webp';
-
-const RANK_IMGS = {
-  CHALLENGER: CHALLENGER_IMG,
-  GRANDMASTER: GRANDMASTER_IMG,
-  MASTER: MASTER_IMG,
-  DIAMOND: DIAMOND_IMG,
-  EMERALD: EMERALD_IMG,
-};
 
 const champKey = (name = '') =>
   String(name).replace(/[^a-zA-Z0-9]/g, '').replace(/^./, (c) => c.toUpperCase());
@@ -39,13 +27,6 @@ function fmtElapsed(seconds = 0) {
   const m = Math.floor(Math.max(0, seconds) / 60);
   const s = Math.max(0, Math.floor(seconds % 60));
   return `${m}:${String(s).padStart(2, '0')}`;
-}
-
-function rankEmblem(label) {
-  const tier = (label || '').split(' ')[0].toUpperCase();
-  if (RANK_IMGS[tier]) return RANK_IMGS[tier];
-  if (!tier || tier === 'UNRANKED') return null;
-  return `https://raw.communitydragon.org/latest/plugins/rcp-fe-lol-static-assets/global/default/ranked-emblem/emblem-${tier.toLowerCase()}.png`;
 }
 
 function rankLine(player, t) {
@@ -145,7 +126,7 @@ function BanRow({ bans, team }) {
 function PlayerCard({ player, ranked }) {
   const navigate = useNavigate();
   const { t } = useI18n();
-  const emblem = rankEmblem(player.rank);
+  const emblem = rankImg(player.rank);
   const record = overallLine(player);
   const unranked = player.rankUnknown || !player.rank || player.rank === 'Unranked';
   const riotId = player.riotId || (player.tagLine ? `${player.gameName}#${player.tagLine}` : '');

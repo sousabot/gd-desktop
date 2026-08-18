@@ -22,12 +22,9 @@ import {
   resolveEstimatedMmr,
 } from '../lib/rankMmr';
 import { loadOpggRankContext } from '../lib/seasonPeak';
+import { applyLpNotes, formatLpDelta } from '../lib/lpHistory';
+import { RANK_COLORS, rankColor, rankImg, rankEmblemClass } from '../lib/rankEmblem';
 import './Dashboard.css';
-import CHALLENGER_IMG  from '../assets/ranks/CHALLENGER.webp';
-import GRANDMASTER_IMG from '../assets/ranks/GRANDMASTER_SMALL.webp';
-import MASTER_IMG      from '../assets/ranks/MASTER.webp';
-import DIAMOND_IMG     from '../assets/ranks/DIAMOND.webp';
-import EMERALD_IMG     from '../assets/ranks/EMERALD.webp';
 
 /* ─── helpers ─────────────────────────────────────────────── */
 const normChamp = (name = '') =>
@@ -44,25 +41,6 @@ const fmtElapsed = (seconds = 0) => {
   const s = Math.max(0, Math.floor(seconds % 60));
   return `${m}:${String(s).padStart(2, '0')}`;
 };
-
-const RANK_COLORS = {
-  IRON: '#8a8a8a', BRONZE: '#cd7f32', SILVER: '#9fb3c8', GOLD: '#e0b256',
-  PLATINUM: '#4fd7c5', EMERALD: '#3ecf8e', DIAMOND: '#5ba2ff',
-  MASTER: '#a06bff', GRANDMASTER: '#ff5c68', CHALLENGER: '#ffd76b',
-};
-const rankColor = (label) =>
-  RANK_COLORS[(label || '').split(' ')[0].toUpperCase()] || '#7c5cff';
-
-const RANK_IMGS = {
-  CHALLENGER:  CHALLENGER_IMG,
-  GRANDMASTER: GRANDMASTER_IMG,
-  MASTER:      MASTER_IMG,
-  DIAMOND:     DIAMOND_IMG,
-  EMERALD:     EMERALD_IMG,
-  PLATINUM:    EMERALD_IMG,  // fallback until you add the asset
-};
-const rankImg = (label) =>
-  RANK_IMGS[(label || '').split(' ')[0].toUpperCase()] || null;
 
 function peakStoreKey(riotId, mode) {
   return `rift-peak-rank:${String(riotId || '').toLowerCase()}:${mode}`;
@@ -196,8 +174,11 @@ function LPRing({ lp, win }) {
 /* ─── RecentGameRow ────────────────────────────────────────── */
 function RecentGameRow({ game, active, onSelect }) {
   const { t } = useI18n();
-  const { champion, win, kills, deaths, assists, kda, ago, gdScore, lp, queueLabel, queueType } = game;
+  const { champion, win, kills, deaths, assists, kda, ago, gdScore, lp, queueLabel, queueType, lpDelta, lpDeltaEst } = game;
   const score = gdScore ?? lp;
+  const measured = formatLpDelta(lpDelta);
+  const lpLabel = measured || formatLpDelta(lpDeltaEst, true);
+  const estimated = Boolean(lpLabel) && !measured;
   return (
     <button
       type="button"
@@ -211,6 +192,14 @@ function RecentGameRow({ game, active, onSelect }) {
       <div className="db-recent-mid">
         <div className="db-recent-top-row">
           <span className={`db-recent-result ${win ? 'win' : 'loss'}`}>{win ? t('dash.win') : t('dash.loss')}</span>
+          {lpLabel ? (
+            <span
+              className={`db-recent-lp ${((measured ? lpDelta : lpDeltaEst) >= 0) ? 'is-up' : 'is-down'}${estimated ? ' is-est' : ''}`}
+              title={estimated ? t('dash.lpEstHint') : undefined}
+            >
+              {lpLabel}
+            </span>
+          ) : null}
           <span className="db-recent-queue">{queueLabel || queueType || 'Solo/Duo'}</span>
         </div>
         <span className="db-recent-kda">{kills}/{deaths}/{assists}</span>
@@ -381,7 +370,7 @@ export default function Dashboard() {
     const lcuJob = (!viewingOther && window.lcuAPI?.getRankedInsight)
       ? window.lcuAPI.getRankedInsight().then((insight) => {
         const same = insight?.riotId
-          && String(insight.riotId).toLowerCase() === String(profile.riotId).toLowerCase();
+          && String(insight.riotId).trim().toLowerCase() === String(profile.riotId).trim().toLowerCase();
         const pack = mode === 'Flex' ? insight?.flex : insight?.solo;
         return same ? pack : null;
       }).catch(() => null)
@@ -395,6 +384,20 @@ export default function Dashboard() {
     Promise.all([lcuJob, trackerJob]).then(([pack, ctx]) => {
       applyPeak(pack, ctx?.peak || profile.seasonPeak || null);
       if (ctx?.lobbyMmrs?.length) applyMmr(ctx.lobbyMmrs);
+      if (cancelled || (mode !== 'Solo' && mode !== 'Flex')) return;
+      const notes = pack?.notes || [];
+      if (!notes.some((n) => n.lpDelta != null)) return;
+      setProfile((prev) => {
+        if (!prev?.recentGames) return prev;
+        const recentGames = applyLpNotes(
+          prev.recentGames,
+          notes,
+          prev.riotId,
+          mode,
+          MODE_QUEUE[mode],
+        );
+        return recentGames === prev.recentGames ? prev : { ...prev, recentGames };
+      });
     });
     return () => { cancelled = true; };
   }, [profile?.riotId, profile?.puuid, profile?.platform, profile?.seasonPeak, profile?.rankTier, profile?.rankDivision, profile?.lp, profile?.wins, profile?.losses, profile?.estMmr, mode, viewingOther]);
@@ -561,7 +564,7 @@ export default function Dashboard() {
                       <span className="db-rank-card-eyebrow">{MODE_LABEL[mode] === 'All Queues' ? t('dash.ranked') : MODE_LABEL[mode]}</span>
                       <div className="db-rank-card-main">
                         {rankImg(profile.rank) && (
-                          <img src={rankImg(profile.rank)} alt={profile.rank} className="db-rank-card-emblem" />
+                          <img src={rankImg(profile.rank)} alt={profile.rank} className={rankEmblemClass(profile.rank, 'db-rank-card-emblem')} />
                         )}
                         <div className="db-rank-card-info">
                           <span className="db-rank-card-name" style={{ color: rc }}>{profile.rank || t('dash.unranked')}</span>

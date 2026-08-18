@@ -233,15 +233,22 @@ button.db-filter-label { cursor: pointer; font: inherit; }
   display: flex;
   flex-direction: column;
   gap: 4px;
+  overflow: visible;
 }
 .db-rank-card-eyebrow {
   font-size: 10px; font-weight: 700; color: #fff;
   text-transform: uppercase; letter-spacing: 0.1em;
 }
-.db-rank-card-main { display: flex; align-items: center; gap: 10px; }
+.db-rank-card-main { display: flex; align-items: center; gap: 10px; overflow: visible; }
 .db-rank-card-emblem {
-  width: 46px; height: 46px; object-fit: contain;
+  width: 72px; height: 72px; object-fit: contain; flex-shrink: 0;
   filter: drop-shadow(0 0 12px color-mix(in srgb, var(--rc, #a06bff) 50%, transparent));
+}
+.db-rank-card-emblem.is-fullframe {
+  transform: scale(4.6);
+  transform-origin: center center;
+  mix-blend-mode: lighten;
+  filter: none;
 }
 .db-rank-card-info { display: flex; flex-direction: column; gap: 1px; }
 .db-rank-card-name {
@@ -675,6 +682,16 @@ button.db-filter-label { cursor: pointer; font: inherit; }
   text-align: left;
   cursor: pointer;
 }
+.db-recent-lp {
+  font-size: 12px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  font-family: var(--rift-font-mono);
+  white-space: nowrap;
+}
+.db-recent-lp.is-up { color: #3ecf8e; }
+.db-recent-lp.is-down { color: var(--rift-danger); }
+.db-recent-lp.is-est { font-size: 11px; }
 .db-recent-row--win  { background: rgba(91,162,255,0.10); }
 .db-recent-row--loss { background: rgba(255,92,104,0.10); }
 .db-recent-row.is-active { border-color: rgba(255,255,255,0.22); }

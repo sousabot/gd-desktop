@@ -138,11 +138,14 @@ export function itemsForKeystone(rows = [], perkId) {
 
 const WIKI_ROLE = { Top: 'Top', Jungle: 'Jungle', Mid: 'Mid', ADC: 'Bot', Support: 'Support' };
 
-function cargoWhere(champion, role) {
+function cargoWhere(champion, role, since) {
   const name = String(champion || '').replace(/"/g, '').trim();
   const wikiRole = WIKI_ROLE[role] || role || '';
-  if (wikiRole) return `Champion="${name}" AND IngameRole="${wikiRole}" AND DateTime_UTC IS NOT NULL`;
-  return `Champion="${name}" AND DateTime_UTC IS NOT NULL`;
+  let where = wikiRole
+    ? `Champion="${name}" AND IngameRole="${wikiRole}" AND DateTime_UTC IS NOT NULL`
+    : `Champion="${name}" AND DateTime_UTC IS NOT NULL`;
+  if (since) where += ` AND DateTime_UTC >= "${String(since).replace(/"/g, '')}"`;
+  return where;
 }
 
 function mapWikiRows(payload) {
@@ -164,7 +167,7 @@ function mapWikiRows(payload) {
   }).filter((row) => row.player);
 }
 
-async function cargoQuery(champion, role) {
+async function cargoQuery(champion, role, since) {
   const params = new URLSearchParams({
     action: 'cargoquery',
     format: 'json',
@@ -172,7 +175,7 @@ async function cargoQuery(champion, role) {
     limit: '25',
     tables: 'ScoreboardPlayers',
     fields: 'Link,Team,Champion,IngameRole,DateTime_UTC,Items,KeystoneRune,PrimaryTree,SecondaryTree',
-    where: cargoWhere(champion, role),
+    where: cargoWhere(champion, role, since),
     order_by: 'DateTime_UTC DESC',
   });
   const res = await fetch(`https://lol.fandom.com/api.php?${params.toString()}`, {
@@ -188,8 +191,9 @@ export async function fetchProbuilds({ champion, role } = {}) {
   const name = String(champion || '').trim();
   if (!name) return { ok: true, rows: [] };
   try {
-    let rows = role ? await cargoQuery(name, role) : [];
-    if (!rows.length) rows = await cargoQuery(name, '');
+    const recent = new Date(Date.now() - 55 * 86400000).toISOString().slice(0, 19).replace('T', ' ');
+    let rows = role ? await cargoQuery(name, role, recent) : await cargoQuery(name, '', recent);
+    if (!rows.length && role) rows = await cargoQuery(name, role, '');
     return { ok: true, rows, source: 'Leaguepedia' };
   } catch (err) {
     return { ok: false, rows: [], error: err.message || 'Could not load pro builds.' };
