@@ -1,7 +1,8 @@
-# Rift.lol
+# RIFT.LOL Desktop
 
-A League of Legends stats tracker for Windows (violet + gold, Space Grotesk
-headers, mono stat numbers), built as an Electron + React (Vite) app.
+A League of Legends stats tracker, RIFT.LOL
+identity (violet + gold, Space Grotesk headers, mono stat numbers), built
+as an Electron + React (Vite) app.
 
 **This is a fresh scaffold, not a merge of your previous `gd-desktop`
 project.** Your earlier screenshots only showed filenames
