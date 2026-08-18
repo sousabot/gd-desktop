@@ -1,4 +1,4 @@
-// GD Score — GD Esports performance rating (0–100).
+// Rift Score — Rift.lol performance rating (0–100).
 // Built from that game's box score, role-weighted. Not Riot's metric and not DPM.gg's.
 
 const ROLE_KEYS = {
@@ -108,4 +108,4 @@ export function gdScoreFromParticipant(p, match) {
 }
 
 export const GD_SCORE_HINT =
-  'GD Score (0–100): role-weighted from KDA, kill participation, damage share, CS/min, vision, and result.';
+  'Rift Score (0–100): role-weighted from KDA, kill participation, damage share, CS/min, vision, and result.';

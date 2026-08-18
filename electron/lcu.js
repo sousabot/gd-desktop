@@ -27,13 +27,13 @@ function execPs(command) {
   });
 }
 
-function parseLockfile(raw) {
+function parseLockfile(raw, installDir) {
   const parts = String(raw || '').trim().split(':');
   if (parts.length < 4) return null;
   const port = Number(parts[2]);
   const password = parts[3];
   if (!Number.isFinite(port) || port < 1 || !password) return null;
-  return { port, password };
+  return { port, password, installDir: installDir || '' };
 }
 
 function parseCommandLine(cmd) {
@@ -43,10 +43,10 @@ function parseCommandLine(cmd) {
   return { port, password };
 }
 
-function readLockfile(filePath) {
+function readLockfile(filePath, installDir) {
   try {
     if (!filePath || !fs.existsSync(filePath)) return null;
-    return parseLockfile(fs.readFileSync(filePath, 'utf8'));
+    return parseLockfile(fs.readFileSync(filePath, 'utf8'), installDir || path.dirname(filePath));
   } catch {
     return null;
   }
@@ -60,7 +60,7 @@ async function getCredentials() {
     'D:\\Riot Games\\League of Legends\\lockfile',
   ];
   for (const file of defaults) {
-    const parsed = readLockfile(file);
+    const parsed = readLockfile(file, path.dirname(file));
     if (parsed) {
       credsCache = { at: Date.now(), creds: parsed };
       return parsed;
@@ -71,7 +71,8 @@ async function getCredentials() {
     "(Get-Process LeagueClientUx -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty Path)",
   );
   if (uxPath) {
-    const parsed = readLockfile(path.join(path.dirname(uxPath), 'lockfile'));
+    const installDir = path.dirname(uxPath);
+    const parsed = readLockfile(path.join(installDir, 'lockfile'), installDir);
     if (parsed) {
       credsCache = { at: Date.now(), creds: parsed };
       return parsed;
@@ -417,7 +418,7 @@ async function getStatus() {
   }
 }
 
-function lcuSend(creds, method, apiPath, body) {
+function lcuSend(creds, method, apiPath, body, timeoutMs = REQ_TIMEOUT) {
   return new Promise((resolve, reject) => {
     const auth = Buffer.from(`riot:${creds.password}`).toString('base64');
     const payload = body == null ? '' : JSON.stringify(body);
@@ -433,7 +434,7 @@ function lcuSend(creds, method, apiPath, body) {
         'Content-Length': Buffer.byteLength(payload),
       },
       rejectUnauthorized: false,
-      timeout: REQ_TIMEOUT,
+      timeout: timeoutMs,
     }, (res) => {
       let data = '';
       res.on('data', (chunk) => { data += chunk; });
@@ -458,7 +459,12 @@ function lcuSend(creds, method, apiPath, body) {
       });
     });
     req.on('error', reject);
-    req.on('timeout', () => { req.destroy(); reject(new Error('LCU timeout')); });
+    req.on('timeout', () => {
+      req.destroy();
+      const err = new Error('LCU timeout');
+      err.timeout = true;
+      reject(err);
+    });
     req.end(payload);
   });
 }
@@ -528,15 +534,21 @@ function actionChamp(cellId, actions, type) {
   return Number(matches[matches.length - 1]?.championId) || 0;
 }
 
-function collectBans(session) {
-  const fromLists = [
-    ...(session.bans?.myTeamBans || []),
-    ...(session.bans?.theirTeamBans || []),
-  ].map(Number).filter((id) => id > 0);
-  if (fromLists.length) return fromLists;
-  return flattenActions(session.actions)
+function collectBansByTeam(session) {
+  const ally = (session.bans?.myTeamBans || []).map(Number).filter((id) => id > 0);
+  const enemy = (session.bans?.theirTeamBans || []).map(Number).filter((id) => id > 0);
+  if (ally.length || enemy.length) return { ally, enemy };
+
+  const myCells = new Set((session.myTeam || []).map((row) => row.cellId));
+  const fromActions = { ally: [], enemy: [] };
+  flattenActions(session.actions)
     .filter((a) => String(a.type || '').toLowerCase() === 'ban' && a.completed && Number(a.championId) > 0)
-    .map((a) => Number(a.championId));
+    .forEach((a) => {
+      const id = Number(a.championId);
+      if (myCells.has(a.actorCellId)) fromActions.ally.push(id);
+      else fromActions.enemy.push(id);
+    });
+  return fromActions;
 }
 
 function mapSeat(row, byId, localCellId, actions) {
@@ -599,12 +611,15 @@ function buildDraftPayload(session, byId, extra = {}) {
   const enemies = (session.theirTeam || []).map((row) => mapSeat(row, byId, localCellId, actions));
   const you = allies.find((p) => p.isYou) || null;
   const yourAction = actions.find((a) => a.actorCellId === localCellId && a.isInProgress) || null;
+  const banSplit = collectBansByTeam(session);
   return {
     connected: true,
     you,
     allies,
     enemies,
-    bans: enrichBans(collectBans(session), byId),
+    bans: enrichBans([...banSplit.ally, ...banSplit.enemy], byId),
+    allyBans: enrichBans(banSplit.ally, byId),
+    enemyBans: enrichBans(banSplit.enemy, byId),
     acting: yourAction ? {
       id: yourAction.id,
       type: yourAction.type,
@@ -767,9 +782,103 @@ async function gameflowPhase() {
   try {
     const phase = await lcuGet(creds, '/lol-gameflow/v1/gameflow-phase');
     const value = typeof phase === 'string' ? phase : String(phase || '');
-    return { connected: true, phase: value.replace(/"/g, '') };
+    return { connected: true, phase: value.replace(/^"+|"+$/g, '') };
   } catch {
-    return { connected: true, phase: 'Unknown' };
+    try {
+      const session = await lcuGet(creds, '/lol-gameflow/v1/session');
+      const phase = session?.phase || session?.gameflowPhase || '';
+      return { connected: true, phase: String(phase || 'Unknown') };
+    } catch {
+      return { connected: true, phase: 'Unknown' };
+    }
+  }
+}
+
+const REGION_TO_PLATFORM = {
+  EUW: 'EUW1', EUNE: 'EUN1', NA: 'NA1', KR: 'KR', BR: 'BR1',
+  LAN: 'LA1', LAS: 'LA2', OCE: 'OC1', JP: 'JP1', TR: 'TR1',
+  RU: 'RU', PH: 'PH2', SG: 'SG2', TH: 'TH2', TW: 'TW2', VN: 'VN2', ME: 'ME1',
+};
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function queueType(queueId) {
+  if (Number(queueId) === 420) return 'RANKED_SOLO_5x5';
+  if (Number(queueId) === 440) return 'RANKED_FLEX_SR';
+  if (Number(queueId) === 700) return 'CLASH';
+  return '';
+}
+
+function spectatePayload(game) {
+  return {
+    allowObserveMode: 'ALL',
+    dropInSpectateGameId: String(game.gameId || ''),
+    gameQueueType: queueType(game.queueId),
+    puuid: String(game.puuid || ''),
+    spectatorKey: String(game.encryptionKey || ''),
+  };
+}
+
+function spectatorCommand(game, host) {
+  const key = String(game.encryptionKey || '');
+  const gameId = String(game.gameId || '');
+  const platformId = String(game.platformId || '').toUpperCase();
+  return `spectator ${host} ${key} ${gameId} ${platformId}`;
+}
+
+function humanSpectateError(raw) {
+  const msg = String(raw || '');
+  if (/busy|InProgress|ChampSelect|queue/i.test(msg)) {
+    return 'League is in a game or queue. Finish or leave that, stay on the home screen, then spectate.';
+  }
+  if (/spectator key/i.test(msg)) {
+    return 'Spectator key was missing. Refresh the live list, then try again.';
+  }
+  return 'League could not start spectator. Stay on the client home screen, then try again.';
+}
+
+async function getClientPlatform() {
+  const creds = await getCredentials();
+  if (!creds) return null;
+  try {
+    const info = await lcuGet(creds, '/riotclient/region-locale');
+    const region = String(info?.region || info?.webRegion || '').toUpperCase();
+    if (REGION_TO_PLATFORM[region]) return REGION_TO_PLATFORM[region];
+    if (region) return region;
+  } catch { /* try platform config */ }
+  try {
+    const cfg = await lcuGet(creds, '/lol-platform-config/v1/namespaces/LoginDataPacket');
+    const id = String(cfg?.platformId || '').toUpperCase();
+    if (id) return id;
+  } catch { /* ignore */ }
+  return null;
+}
+
+async function dismissLeftover(creds) {
+  const paths = [
+    ['POST', '/lol-gameflow/v1/pre-end-of-game/complete', {}],
+    ['POST', '/lol-end-of-game/v1/state/dismiss-stats', {}],
+  ];
+  for (const [method, apiPath, body] of paths) {
+    try { await lcuSend(creds, method, apiPath, body, 1500); }
+    catch { /* leftover may already be gone */ }
+  }
+}
+
+async function launchedPhase() {
+  const next = await gameflowPhase();
+  return /InProgress|Watch|GameStart/i.test(String(next.phase || ''));
+}
+
+async function postSpectate(creds, path, body) {
+  try {
+    await lcuSend(creds, 'POST', path, body, 2500);
+    return { ok: true };
+  } catch (err) {
+    if (err.timeout || await launchedPhase()) return { ok: true, via: 'pending' };
+    return { ok: false, error: err.message || String(err) };
   }
 }
 
@@ -782,48 +891,129 @@ async function launchSpectate(game) {
       error: 'Open the League client first, stay on the home screen, then spectate.',
     };
   }
-  const flow = await gameflowPhase();
-  const busy = new Set(['InProgress', 'ChampSelect', 'ReadyCheck', 'Matchmaking', 'Reconnect']);
-  if (busy.has(flow.phase)) {
+
+  const clientPlatform = await getClientPlatform();
+  const gamePlatform = String(game.platformId || '').toUpperCase();
+  if (clientPlatform && gamePlatform && clientPlatform !== gamePlatform) {
+    return {
+      ok: false,
+      reason: 'region',
+      clientPlatform,
+      gamePlatform,
+      error: `This game is ${gamePlatform}. Your League client is ${clientPlatform} — switch servers, or pick a ${clientPlatform} game.`,
+    };
+  }
+
+  let flow = await gameflowPhase();
+  const leftover = /WaitingForStats|PreEndOfGame|EndOfGame|TerminatedInError/i;
+  if (leftover.test(String(flow.phase || ''))) {
+    await dismissLeftover(creds);
+    await sleep(300);
+    flow = await gameflowPhase();
+  }
+
+  const busy = /InProgress|ChampSelect|ReadyCheck|Matchmaking|Reconnect|GameStart|Watch/i;
+  if (busy.test(String(flow.phase || ''))) {
     return {
       ok: false,
       reason: 'busy',
       phase: flow.phase,
-      error: 'League is in a game or queue. Leave that first, then spectate.',
+      error: 'League is in a game or queue. Finish or leave that, stay on the home screen, then spectate.',
     };
   }
-  const gameId = String(game.gameId || '');
-  const key = String(game.encryptionKey || '');
-  const platformId = String(game.platformId || '').toUpperCase();
-  const tries = [
-    {
-      allowObserveMode: 'ALL',
-      dropInSpectateGameId: gameId,
-      encryptionKey: key,
-      region: platformId,
-    },
-    {
-      allowObserveMode: 'ALL',
-      dropInSpectateGameId: `${platformId}_${gameId}`,
-      encryptionKey: key,
-      gameQueueConfigId: Number(game.queueId) || 0,
-    },
-    {
-      dropInSpectateGameId: gameId,
-      encryptionKey: key,
-      region: platformId,
-    },
-  ];
-  let lastErr = '';
-  for (const body of tries) {
-    try {
-      await lcuSend(creds, 'POST', '/lol-spectator/v1/spectate/launch', body);
-      return { ok: true, via: 'lcu' };
-    } catch (err) {
-      lastErr = err.message || String(err);
-    }
+
+  const host = String(game.observerHost || '');
+  const line = spectatorCommand(game, host);
+  const info = spectatePayload(game);
+  const first = await postSpectate(creds, '/lol-gameflow/v1/watch/launch', [line]);
+  if (first.ok) return { ok: true, via: 'lcu' };
+
+  await sleep(400);
+  if (await launchedPhase()) return { ok: true, via: 'lcu' };
+
+  const second = await postSpectate(creds, '/lol-spectator/v1/spectate/launch', info);
+  if (second.ok) return { ok: true, via: 'lcu' };
+
+  return { ok: false, reason: 'lcu', error: humanSpectateError(first.error || second.error) };
+}
+
+async function leagueGameExe(creds) {
+  const found = creds || await getCredentials();
+  const dir = found?.installDir;
+  if (!dir) return '';
+  const exe = path.join(dir, 'Game', 'League of Legends.exe');
+  return fs.existsSync(exe) ? exe : '';
+}
+
+function asList(value) {
+  if (!value) return [];
+  if (Array.isArray(value)) return value;
+  if (Array.isArray(value.notifications)) return value.notifications;
+  return [value];
+}
+
+function noteFields(note) {
+  if (!note || typeof note !== 'object') return null;
+  const lp = Number(note.leaguePoints);
+  const lpDelta = Number(note.leaguePointsDelta);
+  return {
+    queueType: note.queueType || note.queue || null,
+    tier: note.tier || null,
+    division: note.division || note.rank || null,
+    lp: Number.isFinite(lp) ? lp : null,
+    lpDelta: Number.isFinite(lpDelta) ? lpDelta : null,
+  };
+}
+
+function queuePack(stats, notes) {
+  return (queueType) => {
+    const q = stats?.queueMap?.[queueType]
+      || (Array.isArray(stats?.queues) ? stats.queues.find((row) => row?.queueType === queueType) : null);
+    const queueNotes = notes.filter((n) => !n.queueType || n.queueType === queueType);
+    return {
+      highestTier: q?.highestTier || null,
+      highestDivision: q?.highestDivision || q?.highestRank || null,
+      notes: queueNotes,
+    };
+  };
+}
+
+async function lcuTry(creds, apiPath) {
+  try {
+    return await lcuGet(creds, apiPath);
+  } catch {
+    return null;
   }
-  return { ok: false, reason: 'lcu', error: lastErr || 'League client refused spectator.' };
+}
+
+async function getRankedInsight() {
+  const creds = await getCredentials();
+  if (!creds) return { ok: false };
+  let me = null;
+  try {
+    me = await lcuGet(creds, '/lol-summoner/v1/current-summoner');
+  } catch {
+    return { ok: false };
+  }
+  const [stats, notifications, lastChange] = await Promise.all([
+    lcuTry(creds, '/lol-ranked/v1/current-ranked-stats'),
+    lcuTry(creds, '/lol-ranked/v1/notifications'),
+    lcuTry(creds, '/lol-ranked/v1/current-lp-change-notification'),
+  ]);
+  const notes = [...asList(notifications), ...asList(lastChange)]
+    .map(noteFields)
+    .filter(Boolean);
+  const pack = queuePack(stats, notes);
+  const ident = summonerFrom(me);
+  const riotId = ident?.gameName && ident?.tagLine
+    ? `${ident.gameName}#${ident.tagLine}`
+    : '';
+  return {
+    ok: true,
+    riotId,
+    solo: pack('RANKED_SOLO_5x5'),
+    flex: pack('RANKED_FLEX_SR'),
+  };
 }
 
 function register(ipcMain) {
@@ -832,6 +1022,7 @@ function register(ipcMain) {
   ipcMain.handle('lcu:champSelect', () => getChampSelect());
   ipcMain.handle('lcu:applyRunes', (_e, page) => applyRunePage(page));
   ipcMain.handle('lcu:selectChamp', (_e, payload) => selectChampion(payload?.championId, !!payload?.lock));
+  ipcMain.handle('lcu:rankedInsight', () => getRankedInsight());
 }
 
 module.exports = {
@@ -841,5 +1032,6 @@ module.exports = {
   applyRunePage,
   launchSpectate,
   gameflowPhase,
+  leagueGameExe,
   register,
 };

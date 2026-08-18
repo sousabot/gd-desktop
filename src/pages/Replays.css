@@ -1,7 +1,7 @@
 .rp-page {
   min-height: 100%;
   background: #0b0c10;
-  color: var(--gd-text-primary);
+  color: var(--rift-text-primary);
   padding: 18px 22px 40px;
   box-sizing: border-box;
 }
@@ -15,7 +15,7 @@
 }
 .rp-head h1 {
   margin: 0;
-  font-family: var(--gd-font-display);
+  font-family: var(--rift-font-display);
   font-size: 28px;
   font-weight: 700;
   letter-spacing: -0.04em;
@@ -24,13 +24,13 @@
   margin-left: 10px;
   font-size: 14px;
   font-weight: 600;
-  color: var(--gd-text-muted);
+  color: var(--rift-text-muted);
   letter-spacing: 0;
 }
 .rp-head p {
   margin: 6px 0 0;
   font-size: 12px;
-  color: var(--gd-text-muted);
+  color: var(--rift-text-muted);
   max-width: 620px;
   line-height: 1.45;
 }
@@ -48,6 +48,11 @@
 .rp-btn:hover { background: rgba(255,255,255,0.1); }
 .rp-btn:disabled { opacity: 0.55; cursor: default; }
 .rp-btn-ghost { background: transparent; }
+.rp-btn-ghost.is-on {
+  background: var(--rift-violet-soft);
+  border-color: rgba(124, 92, 255, 0.45);
+  color: #fff;
+}
 .rp-btn-stop {
   background: rgba(255,77,109,0.16);
   border-color: rgba(255,77,109,0.45);
@@ -66,7 +71,7 @@
   align-items: center;
   gap: 8px;
   font-size: 12px;
-  color: var(--gd-text-muted);
+  color: var(--rift-text-muted);
   margin-right: auto;
 }
 .rp-dot {
@@ -155,7 +160,7 @@
   border: 1px solid rgba(255,255,255,0.06);
   border-radius: 16px;
   padding: 32px 24px;
-  color: var(--gd-text-muted);
+  color: var(--rift-text-muted);
 }
 .rp-empty h2 { margin: 0 0 8px; color: #fff; font-size: 18px; }
 .rp-empty p { margin: 0; line-height: 1.45; }
@@ -180,7 +185,7 @@
   object-fit: cover;
 }
 .rp-watch-meta strong { display: block; font-size: 14px; }
-.rp-watch-meta span { font-size: 12px; color: var(--gd-text-muted); }
+.rp-watch-meta span { font-size: 12px; color: var(--rift-text-muted); }
 .rp-watch-meta .rp-btn { margin-left: 0; }
 .rp-watch-meta div { margin-right: auto; }
 
@@ -258,7 +263,7 @@
 }
 .rp-icon-btn svg { width: 18px; height: 18px; }
 .rp-time {
-  font-family: var(--gd-font-mono);
+  font-family: var(--rift-font-mono);
   font-size: 11px;
   color: rgba(255,255,255,0.72);
   min-width: 36px;
@@ -340,7 +345,7 @@
   margin-left: 8px;
   font-size: 13px;
   font-weight: 600;
-  color: var(--gd-text-muted);
+  color: var(--rift-text-muted);
 }
 .rp-grid {
   display: grid;
@@ -429,7 +434,7 @@
   font-weight: 700;
   padding: 2px 6px;
   border-radius: 6px;
-  font-family: var(--gd-font-mono);
+  font-family: var(--rift-font-mono);
 }
 .rp-card-art .rp-badge { top: 8px; left: 8px; }
 .rp-card-meta {
@@ -445,7 +450,7 @@
   object-fit: cover;
 }
 .rp-card-meta strong { display: block; font-size: 13px; }
-.rp-card-meta span { font-size: 11px; color: var(--gd-text-muted); }
+.rp-card-meta span { font-size: 11px; color: var(--rift-text-muted); }
 
 .rp-modal {
   position: fixed;
@@ -463,7 +468,7 @@
   padding: 20px;
 }
 .rp-modal-card h3 { margin: 0 0 8px; font-size: 16px; }
-.rp-modal-card p { margin: 0 0 16px; color: var(--gd-text-muted); font-size: 13px; }
+.rp-modal-card p { margin: 0 0 16px; color: var(--rift-text-muted); font-size: 13px; }
 .rp-modal-actions { display: flex; justify-content: flex-end; gap: 8px; }
 
 @media (max-width: 720px) {

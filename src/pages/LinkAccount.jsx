@@ -1,12 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useSession } from '../state/SessionContext';
+import { useI18n } from '../i18n/LocaleContext';
 import { REGIONS, parseRiotIdInput, linkErrorMessage } from '../lib/regions';
 import { noticeFromError } from '../lib/apiNotice';
 import './LinkAccount.css';
 
 export default function LinkAccount() {
   const { session, setSession } = useSession();
+  const { t } = useI18n();
   const navigate = useNavigate();
   const [gameName, setGameName] = useState('');
   const [tagLine, setTagLine] = useState('');
@@ -41,7 +43,7 @@ export default function LinkAccount() {
     const parsed = parseRiotIdInput(gameName, tagLine);
     if (!parsed.gameName || !parsed.tagLine) {
       setStatus('error');
-      setError('Enter both your Riot name and tag (for example Name#EUW).');
+      setError(t('link.needBoth'));
       return;
     }
 
@@ -52,7 +54,7 @@ export default function LinkAccount() {
     const hint = REGIONS[regionIdx] || REGIONS[0];
     if (!window.riotAPI?.linkAccount && !window.riotAPI?.getAccountByRiotId) {
       setStatus('error');
-      setError('Riot connection isn’t available. Restart the app and try again.');
+      setError(t('link.noApi'));
       return;
     }
 
@@ -92,31 +94,31 @@ export default function LinkAccount() {
   };
 
   return (
-    <div className="gd-page gd-page--narrow">
-      <section className="gd-panel">
-        <h2>{session ? 'Switch Riot account' : 'Link your Riot account'}</h2>
+    <div className="rift-page rift-page--narrow">
+      <section className="rift-panel">
+        <h2>{session ? t('link.switchTitle') : t('link.title')}</h2>
         {session && (
-          <div className="gd-link-current">
-            Currently linked as <strong>{session.gameName}#{session.tagLine}</strong>
-            <button type="button" className="gd-link-unlink" onClick={unlink}>Unlink</button>
+          <div className="rift-link-current">
+            {t('link.current', { id: `${session.gameName}#${session.tagLine}` })}
+            <button type="button" className="rift-link-unlink" onClick={unlink}>{t('login.unlink')}</button>
           </div>
         )}
-        <form className="gd-link-form" onSubmit={handleSubmit}>
-          <div className="gd-link-row">
+        <form className="rift-link-form" onSubmit={handleSubmit}>
+          <div className="rift-link-row">
             <input
               value={gameName}
               onChange={(e) => onNameChange(e.target.value)}
-              placeholder="Riot name"
+              placeholder={t('link.name')}
               autoFocus
               autoComplete="off"
               required
             />
-            <span className="gd-link-hash">#</span>
+            <span className="rift-link-hash">#</span>
             <input
-              className="gd-link-tag"
+              className="rift-link-tag"
               value={tagLine}
               onChange={(e) => setTagLine(e.target.value.replace(/^#/, '').toUpperCase())}
-              placeholder="TAG"
+              placeholder={t('link.tag')}
               maxLength={5}
               autoComplete="off"
               required
@@ -128,16 +130,14 @@ export default function LinkAccount() {
               <option key={r.platform} value={i}>{r.label}</option>
             ))}
           </select>
-          <p className="gd-link-hint">
-            {status === 'checking'
-              ? 'Looking up that Riot ID. The first try after opening the app can take up to 20 seconds while the API wakes up.'
-              : 'Server is used as a hint — we still look up the League shard from Riot.'}
+          <p className="rift-link-hint">
+            {status === 'checking' ? t('link.checking') : t('link.hint')}
           </p>
 
-          {status === 'error' && <p className="gd-link-error">{error}</p>}
+          {status === 'error' && <p className="rift-link-error">{error}</p>}
 
           <button type="submit" disabled={status === 'checking'}>
-            {status === 'checking' ? 'Checking…' : session ? 'Switch account' : 'Verify and link'}
+            {status === 'checking' ? t('link.checkingBtn') : session ? t('link.switch') : t('link.verify')}
           </button>
         </form>
       </section>

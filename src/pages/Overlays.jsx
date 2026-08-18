@@ -90,7 +90,7 @@ export default function Overlays() {
           {status?.engine === 'overwolf'
             ? (status?.error
               ? status.error
-              : 'Fullscreen is fine. The HUD appears in-game after the overlay engine injects. Keep GD Esports open until status says in-game, then click back into the match.')
+              : 'Fullscreen is fine. The HUD appears in-game after the overlay engine injects. Keep Rift.lol open until status says in-game, then click back into the match.')
             : 'This session is running as stock Electron, so Fullscreen still cannot show the HUD. Fully quit and run npm run dev again so Overwolf Electron starts.'}
         </div>
       </section>

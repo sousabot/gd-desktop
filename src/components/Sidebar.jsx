@@ -1,5 +1,6 @@
 import React from 'react';
 import { NavLink, useSearchParams } from 'react-router-dom';
+import { useI18n } from '../i18n/LocaleContext';
 import './Sidebar.css';
 
 function IconHome() {
@@ -117,32 +118,32 @@ function IconDraft() {
 
 const NAV_GROUPS = [
   {
-    label: 'GD Core',
+    labelKey: 'nav.core',
     items: [
-      { to: '/', label: 'Dashboard', icon: <IconHome />, end: true },
-      { to: '/history', label: 'History', icon: <IconHistory /> },
-      { to: '/champions', label: 'Champions', icon: <IconChamp /> },
-      { label: 'Tier List', icon: <IconTier />, soon: true },
-      { to: '/leaderboard', label: 'Leaderboard', icon: <IconList /> },
-      { to: '/live', label: 'Live Status', icon: <IconLive /> },
-      { to: '/compare', label: 'Compare', icon: <IconCompare /> },
+      { to: '/', labelKey: 'nav.dashboard', icon: <IconHome />, end: true },
+      { to: '/history', labelKey: 'nav.history', icon: <IconHistory /> },
+      { to: '/champions', labelKey: 'nav.champions', icon: <IconChamp /> },
+      { labelKey: 'nav.tierList', icon: <IconTier />, soon: true },
+      { to: '/leaderboard', labelKey: 'nav.leaderboard', icon: <IconList /> },
+      { to: '/live', labelKey: 'nav.live', icon: <IconLive /> },
+      { to: '/compare', labelKey: 'nav.compare', icon: <IconCompare /> },
     ],
   },
   {
-    label: 'GD App',
+    labelKey: 'nav.app',
     items: [
-      { to: '/link-account', label: 'Link Account', icon: <IconLink /> },
-      { to: '/draft', label: 'Draft', icon: <IconDraft /> },
-      { to: '/replays', label: 'Replays', icon: <IconReplay /> },
-      { label: 'Overlays', icon: <IconGrid />, soon: true },
-      { to: '/spectate', label: 'Spectate', icon: <IconWatch /> },
-      { to: '/collections', label: 'Collections', icon: <IconCollection /> },
+      { to: '/link-account', labelKey: 'nav.link', icon: <IconLink /> },
+      { to: '/draft', labelKey: 'nav.draft', icon: <IconDraft /> },
+      { labelKey: 'nav.replays', icon: <IconReplay />, soon: true },
+      { labelKey: 'nav.overlays', icon: <IconGrid />, soon: true },
+      { to: '/spectate', labelKey: 'nav.spectate', icon: <IconWatch /> },
+      { to: '/collections', labelKey: 'nav.collections', icon: <IconCollection /> },
     ],
   },
   {
-    label: 'GD Insights',
+    labelKey: 'nav.insights',
     items: [
-      { label: 'Esports', icon: <IconEsports />, soon: true },
+      { labelKey: 'nav.esports', icon: <IconEsports />, soon: true },
     ],
   },
 ];
@@ -163,19 +164,20 @@ function playerNavTo(to, searchParams) {
 
 export default function Sidebar() {
   const [searchParams] = useSearchParams();
+  const { t } = useI18n();
 
   return (
-    <aside className="gd-sidebar">
-      <nav className="gd-sidebar__nav">
+    <aside className="rift-sidebar">
+      <nav className="rift-sidebar__nav">
         {NAV_GROUPS.map((group) => (
-          <div key={group.label} className="gd-sidebar__group">
-            <div className="gd-sidebar__group-label">{group.label}</div>
+          <div key={group.labelKey} className="rift-sidebar__group">
+            <div className="rift-sidebar__group-label">{t(group.labelKey)}</div>
             {group.items.map((item) => (
               item.soon ? (
-                <span key={item.label} className="gd-sidebar__link gd-sidebar__link--soon">
-                  <span className="gd-sidebar__icon">{item.icon}</span>
-                  {item.label}
-                  <span className="gd-sidebar__soon">Soon</span>
+                <span key={item.labelKey} className="rift-sidebar__link rift-sidebar__link--soon">
+                  <span className="rift-sidebar__icon">{item.icon}</span>
+                  {t(item.labelKey)}
+                  <span className="rift-sidebar__soon">{t('nav.soon')}</span>
                 </span>
               ) : (
                 <NavLink
@@ -183,11 +185,11 @@ export default function Sidebar() {
                   to={playerNavTo(item.to, searchParams)}
                   end={item.end}
                   className={({ isActive }) =>
-                    `gd-sidebar__link${isActive ? ' gd-sidebar__link--active' : ''}`
+                    `rift-sidebar__link${isActive ? ' rift-sidebar__link--active' : ''}`
                   }
                 >
-                  <span className="gd-sidebar__icon">{item.icon}</span>
-                  {item.label}
+                  <span className="rift-sidebar__icon">{item.icon}</span>
+                  {t(item.labelKey)}
                 </NavLink>
               )
             ))}

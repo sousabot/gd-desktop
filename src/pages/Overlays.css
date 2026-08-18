@@ -4,11 +4,11 @@
   flex-direction: column;
   gap: 18px;
 }
-.ovp-head h1 { margin: 0 0 6px; font-family: var(--gd-font-display); font-size: 26px; }
-.ovp-head p { margin: 0; color: var(--gd-text-muted); max-width: 640px; line-height: 1.45; }
+.ovp-head h1 { margin: 0 0 6px; font-family: var(--rift-font-display); font-size: 26px; }
+.ovp-head p { margin: 0; color: var(--rift-text-muted); max-width: 640px; line-height: 1.45; }
 .ovp-panel {
-  background: var(--gd-bg-card);
-  border: 1px solid var(--gd-border);
+  background: var(--rift-bg-card);
+  border: 1px solid var(--rift-border);
   border-radius: 16px;
   padding: 18px 20px;
   display: flex;
@@ -22,14 +22,14 @@
   justify-content: space-between;
   gap: 16px;
 }
-.ovp-status { margin: 6px 0 0; color: var(--gd-text-muted); font-size: 13px; }
+.ovp-status { margin: 6px 0 0; color: var(--rift-text-muted); font-size: 13px; }
 .ovp-btn {
   border: none;
   border-radius: 10px;
   padding: 10px 14px;
   font-weight: 700;
   cursor: pointer;
-  background: var(--gd-violet);
+  background: var(--rift-violet);
   color: #fff;
 }
 .ovp-btn.is-on { background: rgba(255,255,255,0.1); }
@@ -39,7 +39,7 @@
   align-items: center;
   gap: 8px;
   font-size: 13px;
-  color: var(--gd-text-muted);
+  color: var(--rift-text-muted);
 }
 .ovp-warn {
   background: #3a2a12;

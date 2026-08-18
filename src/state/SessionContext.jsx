@@ -1,11 +1,11 @@
 import React, { createContext, useContext, useState, useCallback } from 'react';
 
-const STORAGE_KEY = 'gd-session';
+const STORAGE_KEY = 'rift-session';
 const SessionContext = createContext(null);
 
 function readStored() {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(STORAGE_KEY) || localStorage.getItem('gd-session');
     return raw ? JSON.parse(raw) : null;
   } catch {
     return null;

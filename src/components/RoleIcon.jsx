@@ -41,7 +41,7 @@ const FALLBACK = {
   ),
 };
 
-export default function RoleIcon({ role, size = 18, className = 'gd-role-icon' }) {
+export default function RoleIcon({ role, size = 18, className = 'rift-role-icon' }) {
   const [failed, setFailed] = useState(false);
   const file = FILES[role];
   if (!file && !FALLBACK[role]) return null;

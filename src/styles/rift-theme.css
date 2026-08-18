@@ -1,0 +1,93 @@
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500;600&display=swap');
+
+:root {
+  --rift-bg: #0b0e16;
+  --rift-bg-card: #121722;
+  --rift-bg-card-hover: #171d2b;
+  --rift-border: rgba(255, 255, 255, 0.08);
+  --rift-border-strong: rgba(255, 255, 255, 0.14);
+
+  --rift-violet: #7c5cff;
+  --rift-violet-soft: rgba(124, 92, 255, 0.16);
+  --rift-gold: #ffb454;
+  --rift-gold-soft: rgba(255, 180, 84, 0.14);
+
+  --rift-success: #3ecf8e;
+  --rift-success-soft: rgba(62, 207, 142, 0.14);
+  --rift-danger: #ff5c68;
+  --rift-danger-soft: rgba(255, 92, 104, 0.14);
+
+  --rift-text-primary: #eceefb;
+  --rift-text-muted: #8890b5;
+  --rift-text-faint: #545b7a;
+
+  --rift-font-display: 'Space Grotesk', 'Inter', sans-serif;
+  --rift-font-body: 'Inter', sans-serif;
+  --rift-font-mono: 'JetBrains Mono', monospace;
+
+  --rift-radius-sm: 8px;
+  --rift-radius-md: 14px;
+  --rift-radius-lg: 20px;
+  --rift-ease: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+* { box-sizing: border-box; }
+html, body, #root {
+  height: 100%;
+  width: 100%;
+  background: transparent;
+  overflow: hidden;
+}
+
+body {
+  color: var(--rift-text-primary);
+  font-family: var(--rift-font-body);
+  margin: 0;
+}
+
+a { color: inherit; }
+.rift-mono { font-family: var(--rift-font-mono); font-variant-numeric: tabular-nums; }
+.rift-text-muted { color: var(--rift-text-muted); }
+
+.rift-shell {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  width: 100%;
+  background: var(--rift-bg);
+  background-image:
+    radial-gradient(circle at 12% 0%, rgba(124, 92, 255, 0.08) 0%, transparent 42%),
+    radial-gradient(circle at 88% 16%, rgba(255, 180, 84, 0.05) 0%, transparent 38%);
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.45);
+}
+.rift-shell__body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+}
+.rift-shell__main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overflow-y: overlay;
+  scrollbar-gutter: auto;
+  background: #0e1018;
+}
+
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; margin: 0; }
+::-webkit-scrollbar-thumb { background: var(--rift-border-strong); border-radius: 8px; }
+.rift-shell__main::-webkit-scrollbar {
+  width: 8px;
+  background: transparent;
+}
+.rift-shell__main::-webkit-scrollbar-track {
+  background: #0e1018;
+}

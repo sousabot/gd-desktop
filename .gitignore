@@ -5,6 +5,7 @@ release/
 .env
 client.env
 gd.env
+rift.env
 *.log
 .DS_Store
 *.exe

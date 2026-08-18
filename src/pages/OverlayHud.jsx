@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import MARK from '../assets/logo-mark.png';
 import './OverlayHud.css';
 
 const MOCK = {
@@ -57,8 +58,8 @@ function HudCard({ snap, clickThrough, onClose, attached, applyHint, editing }) 
       <span className="ov-c ov-c--br" />
 
       <div className="ov-drag">
-        <span className="ov-mark">GD</span>
-        <span className="ov-brand">GD ESPORTS</span>
+        <img className="ov-mark" src={MARK} alt="" />
+        <span className="ov-brand">RIFT.LOL</span>
         {onClose && (
           <button type="button" className="ov-close" onClick={onClose} aria-label="Close overlay">×</button>
         )}
@@ -93,7 +94,7 @@ export default function OverlayHud({ preview = false }) {
 
   useEffect(() => {
     if (preview) return undefined;
-    document.documentElement.classList.add('gd-overlay');
+    document.documentElement.classList.add('rift-overlay');
     window.liveClient?.getClickThrough?.().then((v) => setClickThrough(v !== false));
     window.liveClient?.isEditMode?.().then((v) => setEditing(!!v));
     const offEdit = window.liveClient?.onEditMode?.((v) => setEditing(!!v));
@@ -128,7 +129,7 @@ export default function OverlayHud({ preview = false }) {
       offVideo?.();
       offAttach?.();
       offEdit?.();
-      document.documentElement.classList.remove('gd-overlay');
+      document.documentElement.classList.remove('rift-overlay');
     };
   }, [preview]);
 

@@ -1,12 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useSession } from '../state/SessionContext';
+import { useI18n } from '../i18n/LocaleContext';
 import './FeedbackForm.css';
 
 const FALLBACK_VERSION = '0.1.0';
 
 export default function FeedbackForm({ open, onClose }) {
   const { session } = useSession();
+  const { t } = useI18n();
   const location = useLocation();
   const riotId = session ? `${session.gameName}#${session.tagLine}` : '';
 
@@ -42,32 +44,32 @@ export default function FeedbackForm({ open, onClose }) {
   const submit = async (e) => {
     e.preventDefault();
     if (!title.trim() || !message.trim()) {
-      setError('Add a title and some details.');
+      setError(t('feedback.needFields'));
       return;
     }
-    if (!window.gdAPI?.sendFeedback) {
-      setError('Restart the desktop app so feedback can reach Discord.');
+    if (!window.riftAPI?.sendFeedback) {
+      setError(t('feedback.needApp'));
       return;
     }
     setSending(true);
     setError('');
     try {
-      await window.gdAPI.sendFeedback({
+      await window.riftAPI.sendFeedback({
         kind,
         title: title.trim(),
         message: message.trim(),
         contact: contact.trim(),
         riotId,
         page: location.pathname || '/',
-        appVersion: (await window.gdAPI?.appInfo?.())?.version || FALLBACK_VERSION,
+        appVersion: (await window.riftAPI?.appInfo?.())?.version || FALLBACK_VERSION,
       });
       setSent(true);
     } catch (err) {
       const raw = String(err?.message || '');
       if (raw.includes('No handler registered')) {
-        setError('Quit GD Esports fully (not Refresh) and start it again with npm run dev.');
+        setError(t('feedback.needRestart'));
       } else {
-        setError(raw.replace(/^Error invoking remote method '[^']+': Error:\s*/i, '') || 'Could not send to Discord.');
+        setError(raw.replace(/^Error invoking remote method '[^']+': Error:\s*/i, '') || t('feedback.fail'));
       }
     } finally {
       setSending(false);
@@ -75,64 +77,64 @@ export default function FeedbackForm({ open, onClose }) {
   };
 
   return (
-    <div className="gd-fb-overlay" onClick={() => !sending && onClose?.()} role="presentation">
+    <div className="rift-fb-overlay" onClick={() => !sending && onClose?.()} role="presentation">
       <div
-        className="gd-fb-modal"
+        className="rift-fb-modal"
         role="dialog"
         aria-modal="true"
-        aria-labelledby="gd-fb-title"
+        aria-labelledby="rift-fb-title"
         onClick={(e) => e.stopPropagation()}
       >
-        <button type="button" className="gd-fb-close" onClick={onClose} aria-label="Close">×</button>
+        <button type="button" className="rift-fb-close" onClick={onClose} aria-label={t('common.close')}>×</button>
         {sent ? (
-          <div className="gd-fb-done">
-            <h2 id="gd-fb-title">Sent to Discord</h2>
-            <p>Thanks — we’ll take a look.</p>
-            <button type="button" className="gd-fb-submit" onClick={onClose}>Close</button>
+          <div className="rift-fb-done">
+            <h2 id="rift-fb-title">{t('feedback.sent')}</h2>
+            <p>{t('feedback.thanks')}</p>
+            <button type="button" className="rift-fb-submit" onClick={onClose}>{t('feedback.close')}</button>
           </div>
         ) : (
           <form onSubmit={submit}>
-            <h2 id="gd-fb-title">Report feedback / bugs</h2>
-            <p className="gd-fb-lead">This posts straight into the GD Discord webhook.</p>
+            <h2 id="rift-fb-title">{t('feedback.title')}</h2>
+            <p className="rift-fb-lead">{t('feedback.lead')}</p>
 
-            <div className="gd-fb-kinds">
-              <button type="button" className={kind === 'bug' ? 'is-on' : ''} onClick={() => setKind('bug')}>Bug</button>
-              <button type="button" className={kind === 'feedback' ? 'is-on' : ''} onClick={() => setKind('feedback')}>Feedback</button>
+            <div className="rift-fb-kinds">
+              <button type="button" className={kind === 'bug' ? 'is-on' : ''} onClick={() => setKind('bug')}>{t('feedback.bug')}</button>
+              <button type="button" className={kind === 'feedback' ? 'is-on' : ''} onClick={() => setKind('feedback')}>{t('feedback.idea')}</button>
             </div>
 
             <label>
-              Title
+              {t('feedback.titleLabel')}
               <input
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 maxLength={120}
-                placeholder="Short summary"
+                placeholder={t('feedback.titlePh')}
                 autoFocus
               />
             </label>
             <label>
-              Details
+              {t('feedback.details')}
               <textarea
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
                 maxLength={1800}
                 rows={6}
-                placeholder="What happened, what you expected, and how to reproduce it."
+                placeholder={t('feedback.detailsPh')}
               />
             </label>
             <label>
-              Discord / contact (optional)
+              {t('feedback.contact')}
               <input
                 value={contact}
                 onChange={(e) => setContact(e.target.value)}
                 maxLength={80}
-                placeholder="username"
+                placeholder={t('feedback.contactPh')}
               />
             </label>
-            {riotId && <div className="gd-fb-meta">Linked as {riotId}</div>}
-            {error && <div className="gd-fb-error">{error}</div>}
-            <button type="submit" className="gd-fb-submit" disabled={sending}>
-              {sending ? 'Sending…' : 'Send to Discord'}
+            {riotId && <div className="rift-fb-meta">{t('feedback.linkedAs', { id: riotId })}</div>}
+            {error && <div className="rift-fb-error">{error}</div>}
+            <button type="submit" className="rift-fb-submit" disabled={sending}>
+              {sending ? t('feedback.sending') : t('feedback.send')}
             </button>
           </form>
         )}

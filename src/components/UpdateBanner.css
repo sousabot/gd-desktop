@@ -1,4 +1,4 @@
-.gd-update-banner {
+.rift-update-banner {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -12,7 +12,7 @@
   color: #d8ccff;
   border-bottom: 1px solid rgba(124, 92, 255, 0.28);
 }
-.gd-update-banner button {
+.rift-update-banner button {
   border: 0;
   border-radius: 999px;
   padding: 6px 12px;
@@ -23,4 +23,4 @@
   background: #7c5cff;
   white-space: nowrap;
 }
-.gd-update-banner button:hover { filter: brightness(1.08); }
+.rift-update-banner button:hover { filter: brightness(1.08); }

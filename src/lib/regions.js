@@ -36,11 +36,11 @@ export function linkErrorMessage(err) {
   const msg = String(err?.message || err || '');
   const lower = msg.toLowerCase();
   if (lower.includes('abort') || lower.includes('timeout') || lower.includes('timed out')) {
-    return 'GD API took too long. Wait a few seconds and try again — the first request wakes the server.';
+    return 'Rift.lol API took too long. Wait a few seconds and try again — the first request wakes the server.';
   }
   if (msg.startsWith('Proxy ')) {
     if (msg.includes('401') || msg.includes('Unauthorized')) {
-      return 'This build is not authorized for the GD API. Set the same GD_APP_TOKEN on the server and in client.env, then rebuild Setup.';
+      return 'This build is not authorized for the Rift.lol API. Set the same RIFT_APP_TOKEN on the server and in client.env, then rebuild Setup.';
     }
     if (msg.includes('401') || msg.includes('403')) {
       return `Riot rejected the key on the server. ${msg}`;
@@ -49,10 +49,10 @@ export function linkErrorMessage(err) {
     if (msg.includes('404') || msg.toLowerCase().includes('not found')) {
       return 'Could not find that Riot ID. Check the name and tag (for example Name#EUW).';
     }
-    return `Could not reach the GD API (${msg}). Check that gd-desktop.onrender.com is live, then try again.`;
+    return `Could not reach the Rift.lol API (${msg}). Check that the hosted proxy is live, then try again.`;
   }
-  if (msg.includes('RIOT_API_KEY is not set') || msg.toLowerCase().includes('gd_api_url')) {
-    return 'Riot connection is not configured. Dev: add RIOT_API_KEY to .env. Shared build: set GD_API_URL to the proxy.';
+  if (msg.includes('RIOT_API_KEY is not set') || msg.toLowerCase().includes('rift_api_url') || msg.toLowerCase().includes('gd_api_url')) {
+    return 'Riot connection is not configured. Dev: add RIOT_API_KEY to .env. Shared build: set RIFT_API_URL to the proxy.';
   }
   if (msg.includes(' 401 ') || msg.includes(' 403 ')) {
     return `Riot rejected the request. ${msg.slice(0, 180)}`;

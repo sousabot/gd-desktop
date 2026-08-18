@@ -13,13 +13,13 @@ export function apiUserMessage(err) {
   const msg = String(err?.message || err || '');
   const lower = msg.toLowerCase();
   if (lower.includes('must run as the desktop app')) {
-    return 'Open GD Esports as the desktop app to load live Riot data.';
+    return 'Open Rift.lol as the desktop app to load live Riot data.';
   }
   if (msg.includes('429') || lower.includes('rate limit')) {
     return 'Rate limit hit. Wait 2 minutes, then try again.';
   }
   if (msg.startsWith('Proxy 401') || msg.includes('Unauthorized')) {
-    return 'This build is not authorized for the GD API. Set the same GD_APP_TOKEN on the server and in client.env, then rebuild Setup.';
+    return 'This build is not authorized for the Rift.lol API. Set the same RIFT_APP_TOKEN on the server and in client.env, then rebuild Setup.';
   }
   if (msg.includes('401') || msg.includes('403')) {
     return 'Request blocked (401/403). Wait 2 minutes, then try again.';

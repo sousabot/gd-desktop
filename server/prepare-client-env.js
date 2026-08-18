@@ -31,13 +31,19 @@ function upsert(file, key, value) {
 }
 
 const env = readEnv(dest);
-if (!env.GD_API_URL) {
-  upsert(dest, 'GD_API_URL', 'https://gd-desktop.onrender.com');
-  console.log('[prepare-client-env] set GD_API_URL to the hosted proxy');
+const apiUrl = env.RIFT_API_URL || env.GD_API_URL;
+const token = env.RIFT_APP_TOKEN || env.GD_APP_TOKEN;
+if (!apiUrl) {
+  upsert(dest, 'RIFT_API_URL', 'https://gd-desktop.onrender.com');
+  console.log('[prepare-client-env] set RIFT_API_URL to the hosted proxy');
+} else if (!env.RIFT_API_URL && env.GD_API_URL) {
+  upsert(dest, 'RIFT_API_URL', env.GD_API_URL);
 }
-if (!env.GD_APP_TOKEN) {
-  const token = crypto.randomBytes(24).toString('hex');
-  upsert(dest, 'GD_APP_TOKEN', token);
-  console.log('[prepare-client-env] generated GD_APP_TOKEN. Set the same value on Render:');
-  console.log(`  GD_APP_TOKEN=${token}`);
+if (!token) {
+  const generated = crypto.randomBytes(24).toString('hex');
+  upsert(dest, 'RIFT_APP_TOKEN', generated);
+  console.log('[prepare-client-env] generated RIFT_APP_TOKEN. Set the same value on Render:');
+  console.log(`  RIFT_APP_TOKEN=${generated}`);
+} else if (!env.RIFT_APP_TOKEN && env.GD_APP_TOKEN) {
+  upsert(dest, 'RIFT_APP_TOKEN', env.GD_APP_TOKEN);
 }

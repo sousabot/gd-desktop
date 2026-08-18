@@ -1,9 +1,9 @@
-const KEY = 'gd-recent-ids';
+const KEY = 'rift-recent-ids';
 const MAX = 5;
 
 export function readRecentPlayers() {
   try {
-    const rows = JSON.parse(localStorage.getItem(KEY) || '[]');
+    const rows = JSON.parse(localStorage.getItem(KEY) || localStorage.getItem('gd-recent-ids') || '[]');
     return Array.isArray(rows) ? rows.slice(0, MAX) : [];
   } catch {
     return [];

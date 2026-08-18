@@ -1,6 +1,6 @@
 const { app, ipcMain, shell } = require('electron');
 
-const REPO = { owner: 'sousabot', repo: 'gd-desktop' };
+const REPO = { owner: 'sousabot', repo: 'rift-desktop' };
 const RELEASES_API = `https://api.github.com/repos/${REPO.owner}/${REPO.repo}/releases/latest`;
 const RELEASES_PAGE = `https://github.com/${REPO.owner}/${REPO.repo}/releases/latest`;
 const CHECK_MS = 4 * 60 * 60 * 1000;

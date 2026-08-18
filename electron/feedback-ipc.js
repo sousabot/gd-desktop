@@ -1,4 +1,5 @@
 const WEBHOOK_RE = /^https:\/\/(?:[\w.-]+\.)?discord(?:app)?\.com\/api\/webhooks\/\d+\/[\w-]+$/i;
+const { apiUrl, appToken } = require('./rift-env');
 
 function clip(value, max) {
   return String(value || '').trim().slice(0, max);
@@ -14,13 +15,13 @@ module.exports = function registerFeedbackHandlers(ipcMain) {
       throw new Error('Title and details are required.');
     }
 
-    const proxy = String(process.env.GD_API_URL || '').trim().replace(/\/$/, '');
+    const proxy = apiUrl();
     if (proxy) {
       const res = await fetch(`${proxy}/v1/feedback`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...(process.env.GD_APP_TOKEN ? { Authorization: `Bearer ${process.env.GD_APP_TOKEN}` } : {}),
+          ...(appToken() ? { Authorization: `Bearer ${appToken()}` } : {}),
         },
         body: JSON.stringify({ ...payload, kind: payload.kind, title, message }),
       });
@@ -41,7 +42,7 @@ module.exports = function registerFeedbackHandlers(ipcMain) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        username: 'GD Desktop',
+        username: 'Rift.lol',
         embeds: [{
           title: `${kind}: ${title}`,
           description: message,

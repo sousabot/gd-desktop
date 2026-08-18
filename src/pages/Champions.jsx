@@ -6,10 +6,12 @@ import { parsePlayerSearch, parseRiotId } from '../lib/playerRoute';
 import { apiUserMessage, noticeFromError } from '../lib/apiNotice';
 import { MODE_KEYS, MODE_LABEL, MODE_QUEUE } from '../lib/queues';
 import { useSession } from '../state/SessionContext';
+import { useI18n } from '../i18n/LocaleContext';
 import './Champions.css';
 
 export default function Champions() {
   const { session } = useSession();
+  const { t } = useI18n();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const qParam = parsePlayerSearch(searchParams);
@@ -39,7 +41,7 @@ export default function Champions() {
     const parsed = parseRiotId(riotId, session?.tagLine || '');
     if (!parsed) {
       setProfile(null);
-      setError('Use Name#TAG — for example Ana de Armas#7589.');
+      setError(t('history.needTag'));
       setLoading(false);
       return;
     }
@@ -78,8 +80,8 @@ export default function Champions() {
     <div className="ch-page">
       <header className="ch-head">
         <div>
-          <h1>Champions</h1>
-          <p>{activeId ? `${activeId} · last 40 ${MODE_LABEL[mode].toLowerCase()} games` : 'Link an account to see your champion pool.'}</p>
+          <h1>{t('champions.title')}</h1>
+          <p>{activeId ? t('champions.blurb', { id: activeId, mode: MODE_LABEL[mode].toLowerCase() }) : t('champions.linkBlurb')}</p>
         </div>
         <div className="ch-filters">
           {MODE_KEYS.map((m) => (
@@ -97,16 +99,16 @@ export default function Champions() {
 
       {!activeId ? (
         <div className="ch-empty">
-          <span>Link a Riot account to load champion stats.</span>
-          <button type="button" onClick={() => navigate('/link-account')}>Link account</button>
+          <span>{t('champions.empty')}</span>
+          <button type="button" onClick={() => navigate('/link-account')}>{t('chrome.linkAccount')}</button>
         </div>
       ) : error ? (
         <div className="ch-empty">
           <span>{error}</span>
-          <button type="button" onClick={() => load(activeId)}>Retry</button>
+          <button type="button" onClick={() => load(activeId)}>{t('champions.retry')}</button>
         </div>
       ) : loading || !profile ? (
-        <div className="ch-empty">Loading champion pool…</div>
+        <div className="ch-empty">{t('champions.loading')}</div>
       ) : (
         <div className="ch-table-wrap">
           <table className="ch-table">

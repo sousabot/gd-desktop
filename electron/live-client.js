@@ -26,36 +26,134 @@ function nameMatches(name, keys) {
   return false;
 }
 
-function recorderEventsFromRaw(raw, youRow, active) {
+function shortName(name) {
+  const n = String(name || '').trim();
+  const hash = n.indexOf('#');
+  return hash > 0 ? n.slice(0, hash) : n;
+}
+
+function teamNameKeys(raw, youRow, active) {
   const keys = new Set([...playerKeys(youRow), ...playerKeys(active)]);
+  const team = youRow.team || active.team;
+  if (!team) return keys;
+  for (const p of raw.allPlayers || []) {
+    if (p.team === team) {
+      for (const key of playerKeys(p)) keys.add(key);
+    }
+  }
+  return keys;
+}
+
+function involvedWithTeam(ev, keys) {
+  if (nameMatches(ev.KillerName, keys) || nameMatches(ev.Recipient, keys)) return true;
+  return (ev.Assisters || []).some((n) => nameMatches(n, keys));
+}
+
+function turretOwner(turretId) {
+  const id = String(turretId || '');
+  if (/_T1_/.test(id)) return 'ORDER';
+  if (/_T2_/.test(id)) return 'CHAOS';
+  return '';
+}
+
+function multiLabel(streak) {
+  const n = Number(streak) || 0;
+  if (n >= 5) return 'Penta kill';
+  if (n === 4) return 'Quadra kill';
+  if (n === 3) return 'Triple kill';
+  if (n === 2) return 'Double kill';
+  return '';
+}
+
+function dragonClipLabel(ev) {
+  const raw = String(ev.DragonType || '').trim().toLowerCase();
+  const names = {
+    fire: 'Infernal Drake',
+    infernal: 'Infernal Drake',
+    water: 'Ocean Drake',
+    ocean: 'Ocean Drake',
+    earth: 'Mountain Drake',
+    mountain: 'Mountain Drake',
+    air: 'Cloud Drake',
+    cloud: 'Cloud Drake',
+    hextech: 'Hextech Drake',
+    chemtech: 'Chemtech Drake',
+    elder: 'Elder Dragon',
+  };
+  const name = names[raw] || (ev.DragonType ? `${ev.DragonType} Drake` : 'Drake');
+  return ev.Stolen ? `${name} stolen` : name;
+}
+
+function recorderEventsFromRaw(raw, youRow, active) {
+  const you = new Set([...playerKeys(youRow), ...playerKeys(active)]);
+  const team = teamNameKeys(raw, youRow, active);
+  const youTeam = youRow.team || active.team || '';
   const events = (raw.events && raw.events.Events) || [];
   const out = [];
   for (const ev of events) {
-    if (ev.EventName === 'ChampionKill' && nameMatches(ev.KillerName, keys)) {
+    const name = ev.EventName;
+    if (name === 'ChampionKill' && nameMatches(ev.KillerName, you)) {
       out.push({
         id: ev.EventID,
         type: 'kill',
-        label: ev.VictimName ? `Kill · ${ev.VictimName}` : 'Kill',
+        label: ev.VictimName ? `Kill · ${shortName(ev.VictimName)}` : 'Kill',
         time: ev.EventTime || 0,
       });
       continue;
     }
-    if (ev.EventName === 'Multikill' && nameMatches(ev.KillerName, keys)) {
-      out.push({
-        id: ev.EventID,
-        type: 'multikill',
-        label: ev.KillStreak ? `${ev.KillStreak}x kill` : 'Multikill',
-        time: ev.EventTime || 0,
-      });
+    if (name === 'Multikill') {
+      const label = multiLabel(ev.KillStreak);
+      if (label && nameMatches(ev.KillerName, team)) {
+        const who = shortName(ev.KillerName);
+        const yours = nameMatches(ev.KillerName, you);
+        out.push({
+          id: ev.EventID,
+          type: 'multikill',
+          label: who && !yours ? `${label} · ${who}` : label,
+          time: ev.EventTime || 0,
+        });
+      }
       continue;
     }
-    if (ev.EventName === 'FirstBlood' && nameMatches(ev.Recipient || ev.KillerName, keys)) {
+    if (name === 'FirstBlood' && nameMatches(ev.Recipient || ev.KillerName, you)) {
       out.push({
         id: ev.EventID,
         type: 'firstblood',
         label: 'First blood',
         time: ev.EventTime || 0,
       });
+      continue;
+    }
+    if (name === 'BaronKill' && involvedWithTeam(ev, team)) {
+      out.push({
+        id: ev.EventID,
+        type: 'baron',
+        label: ev.Stolen ? 'Baron stolen' : 'Baron',
+        time: ev.EventTime || 0,
+      });
+      continue;
+    }
+    if (name === 'DragonKill' && involvedWithTeam(ev, team)) {
+      out.push({
+        id: ev.EventID,
+        type: 'dragon',
+        label: dragonClipLabel(ev),
+        time: ev.EventTime || 0,
+      });
+      continue;
+    }
+    if (name === 'TurretKilled') {
+      const owner = turretOwner(ev.TurretKilled);
+      const enemyTurret = !!(owner && youTeam && owner !== youTeam);
+      const unknownTurret = !owner && involvedWithTeam(ev, team);
+      if (enemyTurret || unknownTurret) {
+        out.push({
+          id: ev.EventID,
+          type: 'tower',
+          label: 'Tower',
+          time: ev.EventTime || 0,
+        });
+      }
     }
   }
   return out;

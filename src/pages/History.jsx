@@ -8,10 +8,12 @@ import { parsePlayerSearch, parseRiotId } from '../lib/playerRoute';
 import { apiUserMessage, noticeFromError } from '../lib/apiNotice';
 import { MODE_KEYS, MODE_LABEL, MODE_QUEUE } from '../lib/queues';
 import { useSession } from '../state/SessionContext';
+import { useI18n } from '../i18n/LocaleContext';
 import './History.css';
 
 export default function History() {
   const { session } = useSession();
+  const { t } = useI18n();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const qParam = parsePlayerSearch(searchParams);
@@ -42,7 +44,7 @@ export default function History() {
     const parsed = parseRiotId(riotId, session?.tagLine || '');
     if (!parsed) {
       setProfile(null);
-      setError('Use Name#TAG — for example Ana de Armas#7589.');
+      setError(t('history.needTag'));
       setLoading(false);
       return;
     }
@@ -76,11 +78,11 @@ export default function History() {
     <div className="hs-page">
       <header className="hs-head">
         <div>
-          <h1>Match History</h1>
+          <h1>{t('history.title')}</h1>
           <p>
             {activeId
-              ? `${activeId} · ${profile?.region || ''} · ${loading ? 'loading' : `${games.length} ${MODE_LABEL[mode].toLowerCase()} games`}`
-              : 'Link an account to browse match history.'}
+              ? `${activeId} · ${profile?.region || ''} · ${loading ? t('history.loading') : t('history.games', { n: games.length, mode: MODE_LABEL[mode].toLowerCase() })}`
+              : t('history.linkBlurb')}
           </p>
         </div>
         <div className="hs-filters">
@@ -99,16 +101,16 @@ export default function History() {
 
       {!activeId ? (
         <div className="hs-empty">
-          <span>Link a Riot account to load match history.</span>
-          <button type="button" onClick={() => navigate('/link-account')}>Link account</button>
+          <span>{t('history.empty')}</span>
+          <button type="button" onClick={() => navigate('/link-account')}>{t('chrome.linkAccount')}</button>
         </div>
       ) : error ? (
         <div className="hs-empty">
           <span>{error}</span>
-          <button type="button" onClick={() => load(activeId)}>Retry</button>
+          <button type="button" onClick={() => load(activeId)}>{t('history.retry')}</button>
         </div>
       ) : loading || !profile ? (
-        <div className="hs-empty">Loading matches…</div>
+        <div className="hs-empty">{t('common.loading')}</div>
       ) : (
         <div className="hs-list">
           {games.map((g) => (
@@ -129,9 +131,9 @@ export default function History() {
                 <strong>{g.kills}/{g.deaths}/{g.assists}</strong>
                 <span>{g.kda} KDA</span>
               </div>
-              <div className="hs-gd">
+              <div className="hs-rift">
                 <strong>{g.gdScore ?? '—'}</strong>
-                <span>GD</span>
+                <span>Rift</span>
               </div>
               <div className="hs-cs">
                 <strong>{g.cs}</strong>

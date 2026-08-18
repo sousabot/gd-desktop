@@ -2,8 +2,10 @@ const fs = require('fs');
 const path = require('path');
 const { app } = require('electron');
 
+const SETTINGS_REV = 2;
+
 const DEFAULT_SETTINGS = {
-  autoRecord: true,
+  autoRecord: false,
   clipKills: true,
   preSeconds: 8,
   postSeconds: 4,
@@ -13,7 +15,15 @@ function rootDir() {
   const base = (() => {
     try {
       const videos = app.getPath('videos');
-      if (videos) return path.join(videos, 'GD Esports', 'replays');
+      if (videos) {
+        const next = path.join(videos, 'Rift.lol', 'replays');
+        const prev = path.join(videos, 'GD Esports', 'replays');
+        const prevLive = fs.existsSync(path.join(prev, 'index.json'));
+        const nextLive = fs.existsSync(path.join(next, 'index.json'));
+        const base = (!nextLive && prevLive) ? prev : next;
+        fs.mkdirSync(base, { recursive: true });
+        return base;
+      }
     } catch { /* ignore */ }
     return path.join(app.getPath('userData'), 'replays');
   })();
@@ -42,18 +52,23 @@ function writeJson(file, data) {
   fs.writeFileSync(file, JSON.stringify(data, null, 2));
 }
 
-function getSettings() {
-  const raw = readJson(settingsPath(), {});
+function normalizeSettings(raw = {}) {
+  const migrated = Number(raw.rev) >= SETTINGS_REV;
   return {
-    ...DEFAULT_SETTINGS,
-    ...raw,
+    rev: SETTINGS_REV,
+    autoRecord: migrated ? !!raw.autoRecord : false,
+    clipKills: raw.clipKills !== false,
     preSeconds: Number(raw.preSeconds) > 0 ? Number(raw.preSeconds) : DEFAULT_SETTINGS.preSeconds,
     postSeconds: Number(raw.postSeconds) > 0 ? Number(raw.postSeconds) : DEFAULT_SETTINGS.postSeconds,
   };
 }
 
+function getSettings() {
+  return normalizeSettings(readJson(settingsPath(), {}));
+}
+
 function setSettings(patch) {
-  const next = { ...getSettings(), ...patch };
+  const next = normalizeSettings({ ...getSettings(), ...patch });
   writeJson(settingsPath(), next);
   return next;
 }

@@ -14,8 +14,9 @@ const { getRecorderTick } = require('./live-client');
 const store = require('./replays-store');
 const { patchWebmFile, sliceWebmFile } = require('./webm-duration');
 const { makeSeekableMp4, probeDurationSec, startWindowGrab, stopDesktopGrab, cutClip } = require('./ffmpeg-seekable');
-const { getLeagueBounds, startLeagueWatcher } = require('./league-window');
+const { getLeagueBounds, startLeagueWatcher, stopLeagueWatcher } = require('./league-window');
 
+const ENABLED = false;
 const CLUSTER = Buffer.from([0x1f, 0x43, 0xb6, 0x75]);
 const POLL_MS = 1000;
 const DEBOUNCE_S = 4;
@@ -34,6 +35,7 @@ let readyWait = null;
 
 function idleStatus(extra = {}) {
   return {
+    disabled: !ENABLED,
     recording: false,
     inGame: false,
     you: '',
@@ -45,6 +47,11 @@ function idleStatus(extra = {}) {
     warning: null,
     ...extra,
   };
+}
+
+function finishIdle(extra = {}) {
+  try { stopLeagueWatcher(); } catch { /* ignore */ }
+  broadcast(idleStatus(extra));
 }
 
 function prepare() {
@@ -61,11 +68,9 @@ function prepare() {
       },
     },
   ]);
+  if (!ENABLED) return;
   app.commandLine.appendSwitch('enable-usermedia-screen-capturing');
   app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
-  app.commandLine.appendSwitch('disable-renderer-backgrounding');
-  app.commandLine.appendSwitch('disable-background-timer-throttling');
-  app.commandLine.appendSwitch('disable-backgrounding-occluded-windows');
 }
 
 function fileMime(filePath) {
@@ -207,15 +212,15 @@ function ensureRecorderWindow() {
   recWin = new BrowserWindow({
     width: 72,
     height: 72,
-    x: -120,
-    y: -120,
-    show: true,
-    opacity: 1,
+    x: 0,
+    y: 0,
+    show: false,
     skipTaskbar: true,
     frame: false,
     transparent: false,
-    focusable: true,
+    focusable: false,
     fullscreenable: false,
+    paintWhenInitiallyHidden: true,
     webPreferences: {
       preload: path.join(__dirname, 'recorder-preload.js'),
       contextIsolation: true,
@@ -224,7 +229,7 @@ function ensureRecorderWindow() {
       backgroundThrottling: false,
     },
   });
-  recWin.setIgnoreMouseEvents(true);
+  recWin.setIgnoreMouseEvents(true, { forward: true });
   recWin.setMenuBarVisibility(false);
   recWin.webContents.session.setPermissionRequestHandler((_wc, permission, callback) => {
     callback(permission === 'media' || permission === 'display-capture' || permission === 'clipboard-read');
@@ -453,11 +458,22 @@ function assembleWebm(chunkRows) {
   return Buffer.concat(parts);
 }
 
+function clipRank(type, label = '') {
+  const s = `${type} ${label}`.toLowerCase();
+  if (s.includes('penta')) return 100;
+  if (s.includes('quadra')) return 90;
+  if (s.includes('triple')) return 80;
+  if (s.includes('double') || type === 'multikill') return 70;
+  if (type === 'baron') return 60;
+  if (type === 'dragon') return 55;
+  if (type === 'firstblood') return 40;
+  if (type === 'tower') return 30;
+  return 10;
+}
+
 function clipLabel(pending, ev) {
-  if (ev.type === 'multikill') return ev.label;
-  if (pending?.types?.includes('multikill')) return pending.label;
-  if (ev.type === 'firstblood') return ev.label;
-  return pending?.label || ev.label;
+  if (!pending?.label) return ev.label;
+  return clipRank(ev.type, ev.label) >= clipRank('', pending.label) ? ev.label : pending.label;
 }
 
 function videoTimeSec() {
@@ -560,7 +576,7 @@ function friendlyCaptureError(err) {
   const msg = String(err?.message || err || '');
   if (!msg) return '';
   if (msg.includes('getSources') || msg.toLowerCase().includes('desktopcapturer')) {
-    return 'Could not start capture. Fully quit GD Esports and press Record now again while League is visible in borderless.';
+    return 'Could not start capture. Fully quit Rift.lol and press Record now again while League is visible in borderless.';
   }
   return msg;
 }
@@ -598,6 +614,10 @@ async function startFfmpegFallback(current) {
 }
 
 async function startSession(tick = {}, { manual } = {}) {
+  if (!ENABLED) {
+    broadcast({ error: 'Replays are paused until capture is fixed.' });
+    return getStatus();
+  }
   if (session) return getStatus();
   let source = null;
   try {
@@ -665,11 +685,7 @@ async function startSession(tick = {}, { manual } = {}) {
   });
 
   try {
-    const win = await waitForRecorder();
-    try {
-      win.setOpacity(1);
-      win.showInactive();
-    } catch { /* ignore */ }
+    await waitForRecorder();
     const size = await captureSize();
     sendRecorder('recorder:start', {
       sourceId: source.id,
@@ -757,7 +773,7 @@ function waitForCaptureReady(ms) {
   return new Promise((resolve, reject) => {
     const t = setTimeout(() => {
       readyWait = null;
-      reject(new Error('Capture timed out. The League window was found, but Windows never started the capture. Fully quit GD Esports and try Record now again while the game window is visible.'));
+      reject(new Error('Capture timed out. The League window was found, but Windows never started the capture. Fully quit Rift.lol and try Record now again while the game window is visible.'));
     }, ms);
     readyWait = {
       resolve: () => { clearTimeout(t); resolve(); },
@@ -816,7 +832,7 @@ async function abortSession(message) {
     try { powerSaveBlocker.stop(powerId); } catch { /* ignore */ }
     powerId = null;
   }
-  broadcast(idleStatus({ error: message }));
+  finishIdle({ error: message });
   return getStatus();
 }
 
@@ -849,7 +865,7 @@ async function stopSession() {
       try { powerSaveBlocker.stop(powerId); } catch { /* ignore */ }
       powerId = null;
     }
-    broadcast(idleStatus({ error: message }));
+    finishIdle({ error: message });
     return getStatus();
   }
 
@@ -904,7 +920,7 @@ async function stopSession() {
         try { powerSaveBlocker.stop(powerId); } catch { /* ignore */ }
         powerId = null;
       }
-      broadcast(idleStatus({ error: message }));
+      finishIdle({ error: message });
       return getStatus();
     }
     const src = current.matchFile ? path.join(current.dir, current.matchFile) : null;
@@ -954,7 +970,7 @@ async function stopSession() {
       try { powerSaveBlocker.stop(powerId); } catch { /* ignore */ }
       powerId = null;
     }
-    broadcast(idleStatus({ error: message }));
+    finishIdle({ error: message });
     return getStatus();
   }
 
@@ -967,7 +983,7 @@ async function stopSession() {
     try { powerSaveBlocker.stop(powerId); } catch { /* ignore */ }
     powerId = null;
   }
-  broadcast(idleStatus({ error: current.error || null }));
+  finishIdle({ error: current.error || null });
   return getStatus();
 }
 
@@ -980,11 +996,14 @@ function handleTick(tick, leagueOpen, leagueFocused) {
     lastStatus.gameTime = tick.gameTime || 0;
   }
 
-  const settings = store.getSettings();
   if (tick.inGame) offGameStreak = 0;
   else if (session && !session.manual) offGameStreak += 1;
 
-  if (!session && settings.autoRecord && tick.inGame) {
+  if (!session && tick.inGame) {
+    if (!store.getSettings().autoRecord) {
+      broadcast({ inGame: true, gameTime: tick.gameTime || 0 });
+      return;
+    }
     if (Date.now() - lastStartAttempt < 1500) return;
     lastStartAttempt = Date.now();
     startSession(tick).catch((err) => broadcast({ error: err.message }));
@@ -1053,20 +1072,22 @@ function handleTick(tick, leagueOpen, leagueFocused) {
 }
 
 function startPolling() {
+  if (!ENABLED) return;
   if (pollTimer) return;
-  startLeagueWatcher();
   pollTimer = setInterval(async () => {
     let leagueOpen = false;
     let leagueFocused = false;
-    try {
-      const bounds = await getLeagueBounds();
-      leagueOpen = !!(bounds?.running || bounds?.hasRect);
-      leagueFocused = !!bounds?.focused;
-      if (!leagueOpen) {
-        try { leagueOpen = await leagueGameOpen(); } catch { /* ignore */ }
+    if (session) {
+      try {
+        const bounds = await getLeagueBounds();
+        leagueOpen = !!(bounds?.running || bounds?.hasRect);
+        leagueFocused = !!bounds?.focused;
+        if (!leagueOpen) {
+          try { leagueOpen = await leagueGameOpen(); } catch { /* ignore */ }
+        }
+      } catch {
+        try { leagueOpen = await leagueGameOpen(); } catch { leagueOpen = false; }
       }
-    } catch {
-      try { leagueOpen = await leagueGameOpen(); } catch { leagueOpen = false; }
     }
     try {
       const tick = await getRecorderTick();
@@ -1279,4 +1300,4 @@ async function destroy() {
   recWin = null;
 }
 
-module.exports = { prepare, register, stopSession, destroy };
+module.exports = { ENABLED, prepare, register, stopSession, destroy };

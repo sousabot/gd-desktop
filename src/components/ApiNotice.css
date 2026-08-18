@@ -1,4 +1,4 @@
-.gd-api-notice {
+.rift-api-notice {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -9,10 +9,10 @@
   flex-shrink: 0;
   z-index: 40;
 }
-.gd-api-notice--rate { background: #3a2a12; color: #ffd76b; }
-.gd-api-notice--auth { background: #3a1518; color: #ff8b93; }
-.gd-api-notice--error { background: #1a2030; color: #d7d0ea; }
-.gd-api-notice button {
+.rift-api-notice--rate { background: #3a2a12; color: #ffd76b; }
+.rift-api-notice--auth { background: #3a1518; color: #ff8b93; }
+.rift-api-notice--error { background: #1a2030; color: #d7d0ea; }
+.rift-api-notice button {
   border: none; background: transparent; color: inherit;
   font-size: 18px; line-height: 1; cursor: pointer;
 }

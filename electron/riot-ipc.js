@@ -5,11 +5,12 @@
 const fs = require('fs');
 const path = require('path');
 const { app } = require('electron');
+const { DEFAULT_PROXY, normalizeEnv, apiUrl, appToken, useLocalKey } = require('./rift-env');
 const idCache = require('./id-cache');
 const matchCache = require('./match-cache');
 
 function envCandidates() {
-  const names = ['gd.env', '.env'];
+  const names = ['rift.env', 'gd.env', 'client.env', '.env'];
   const dirs = [];
   const addDir = (dir) => { if (dir) dirs.push(dir); };
 
@@ -38,33 +39,40 @@ function applyEnvFile(filePath) {
     if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
       value = value.slice(1, -1);
     }
-    if (key === 'RIOT_API_KEY' || key === 'DISCORD_WEBHOOK_URL' || key === 'GD_API_URL' || key === 'GD_APP_TOKEN' || !process.env[key]) {
+    if (!value && (key === 'RIFT_APP_TOKEN' || key === 'GD_APP_TOKEN' || key === 'RIOT_API_KEY')) return;
+    if (
+      key === 'RIOT_API_KEY'
+      || key === 'DISCORD_WEBHOOK_URL'
+      || key === 'RIFT_API_URL'
+      || key === 'RIFT_APP_TOKEN'
+      || key === 'GD_API_URL'
+      || key === 'GD_APP_TOKEN'
+      || !process.env[key]
+    ) {
       process.env[key] = value;
     }
   });
 }
 
 function loadEnv() {
-  const found = envCandidates().find((p) => fs.existsSync(p));
-  if (found) {
-    applyEnvFile(found);
-    console.log(`[riot-ipc] Loaded env from ${found}`);
+  const files = envCandidates().filter((p) => fs.existsSync(p));
+  if (files.length) {
+    files.forEach((file) => applyEnvFile(file));
+    console.log(`[riot-ipc] Loaded env from ${files.join(', ')}`);
   } else {
     require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
-    console.warn('[riot-ipc] No gd.env/.env found next to the app.');
+    console.warn('[riot-ipc] No rift.env/.env found next to the app.');
   }
   if (process.env.RIOT_API_KEY) {
     process.env.RIOT_API_KEY = process.env.RIOT_API_KEY.trim();
   }
-  if (process.env.GD_API_URL) {
-    process.env.GD_API_URL = process.env.GD_API_URL.trim().replace(/\/$/, '');
-  }
-  // Packaged testers must hit the proxy even if gd.env failed to unpack.
+  normalizeEnv();
+  // Packaged testers must hit the proxy even if rift.env failed to unpack.
   if (app.isPackaged) {
-    process.env.GD_API_URL = String(process.env.GD_API_URL || '').trim() || 'https://gd-desktop.onrender.com';
-    console.log(`[riot-ipc] Packaged build: using API proxy ${process.env.GD_API_URL}`);
-    if (!String(process.env.GD_APP_TOKEN || '').trim()) {
-      console.warn('[riot-ipc] Packaged build is missing GD_APP_TOKEN in gd.env. The proxy will reject requests.');
+    process.env.RIFT_API_URL = apiUrl() || DEFAULT_PROXY;
+    console.log(`[riot-ipc] Packaged build: using API proxy ${process.env.RIFT_API_URL}`);
+    if (!appToken()) {
+      console.warn('[riot-ipc] Packaged build is missing RIFT_APP_TOKEN in rift.env. The proxy will reject requests.');
     }
   }
 }
@@ -80,11 +88,9 @@ function isRiotUrl(raw) {
   }
 }
 
-const DEFAULT_PROXY = 'https://gd-desktop.onrender.com';
-
 function activeProxy() {
-  if (String(process.env.GD_USE_LOCAL_KEY || '').trim() === '1') return '';
-  return String(process.env.GD_API_URL || DEFAULT_PROXY).trim().replace(/\/$/, '');
+  if (useLocalKey()) return '';
+  return apiUrl() || DEFAULT_PROXY;
 }
 
 let proxyReady = false;
@@ -98,44 +104,41 @@ async function wakeProxy() {
   wakingProxy = (async () => {
     try {
       const res = await fetch(`${proxy}/health`, {
-        headers: { 'User-Agent': 'GD-Esports-Desktop/0.1' },
+        headers: { 'User-Agent': 'Rift.lol-Desktop/0.1' },
         signal: AbortSignal.timeout(45000),
       });
       if (res.ok) proxyReady = true;
       return { ok: res.ok };
     } catch (err) {
       wakingProxy = null;
-      return { ok: false, error: err.message || 'GD API wake failed' };
+      return { ok: false, error: err.message || 'Rift.lol API wake failed' };
     }
   })();
   return wakingProxy;
 }
 
 async function riotFetch(url, attempt = 0) {
-  if (!process.env.RIOT_API_KEY && !process.env.GD_API_URL) loadEnv();
+  if (!process.env.RIOT_API_KEY && !apiUrl()) loadEnv();
   if (!isRiotUrl(url)) throw new Error('Riot API 400 Bad Request — blocked URL');
 
   const proxy = activeProxy();
   if (proxy) {
-    if (app.isPackaged && !String(process.env.GD_APP_TOKEN || '').trim()) {
-      throw new Error('Proxy 401: GD_APP_TOKEN is missing from gd.env');
+    if (app.isPackaged && !appToken()) {
+      throw new Error('Proxy 401: RIFT_APP_TOKEN is missing from rift.env');
     }
     await wakeProxy();
     const res = await fetch(`${proxy}/v1/riot`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'User-Agent': 'GD-Esports-Desktop/0.1',
-        ...(process.env.GD_APP_TOKEN ? { Authorization: `Bearer ${process.env.GD_APP_TOKEN}` } : {}),
+        'User-Agent': 'Rift.lol-Desktop/0.1',
+        ...(appToken() ? { Authorization: `Bearer ${appToken()}` } : {}),
       },
       body: JSON.stringify({ url }),
       signal: AbortSignal.timeout(20000),
     });
     const body = await res.json().catch(() => ({}));
-    if (res.status === 429 && attempt < 2) {
-      await new Promise((r) => setTimeout(r, 1500));
-      return riotFetch(url, attempt + 1);
-    }
+    // Do not retry our proxy's 429 — each retry burns the same 60s window.
     if (!res.ok) {
       throw new Error(`Proxy ${res.status}: ${body.error || res.statusText || 'request failed'}`);
     }
@@ -226,7 +229,8 @@ async function cachedBulkFetch(cacheModule, prefix, ids, fetchOne, ttlMs = Infin
   ids.forEach((id, i) => {
     const entry = cache[`${prefix}:${id}`];
     const fresh = entry && (ttlMs === Infinity || now - entry.timestamp < ttlMs);
-    if (fresh) {
+    // Empty arrays are usually a 429/error fallback — do not treat them as a real result.
+    if (fresh && entry.data != null && !(Array.isArray(entry.data) && entry.data.length === 0)) {
       results[i] = entry.data;
     } else {
       missing.push(i);
@@ -237,7 +241,9 @@ async function cachedBulkFetch(cacheModule, prefix, ids, fetchOne, ttlMs = Infin
     const fetched = await mapWithConcurrency(missing, BULK_CONCURRENCY, (i) => fetchOne(ids[i]));
     missing.forEach((origIdx, j) => {
       results[origIdx] = fetched[j];
-      if (fetched[j] != null) cache[`${prefix}:${ids[origIdx]}`] = { timestamp: now, data: fetched[j] };
+      if (fetched[j] != null && !(Array.isArray(fetched[j]) && fetched[j].length === 0)) {
+        cache[`${prefix}:${ids[origIdx]}`] = { timestamp: now, data: fetched[j] };
+      }
     });
     cacheModule.writeCache(cache);
   }
@@ -246,16 +252,16 @@ async function cachedBulkFetch(cacheModule, prefix, ids, fetchOne, ttlMs = Infin
 }
 
 module.exports = function registerRiotHandlers(ipcMain) {
-  const useLocal = String(process.env.GD_USE_LOCAL_KEY || '').trim() === '1';
+  const useLocal = useLocalKey();
   const proxy = useLocal
     ? ''
-    : String(process.env.GD_API_URL || DEFAULT_PROXY).trim().replace(/\/$/, '');
+    : (apiUrl() || DEFAULT_PROXY);
   if (proxy) {
     console.log(`[riot-ipc] Using API proxy ${proxy}`);
   } else if (process.env.RIOT_API_KEY) {
     console.log(`[riot-ipc] API key loaded (${process.env.RIOT_API_KEY.slice(0, 8)}…)`);
   } else {
-    console.warn('[riot-ipc] No GD_API_URL or RIOT_API_KEY — live Riot data will fail.');
+    console.warn('[riot-ipc] No RIFT_API_URL or RIOT_API_KEY — live Riot data will fail.');
   }
 
   // Riot ID rarely changes — cache the single-lookup version too, since

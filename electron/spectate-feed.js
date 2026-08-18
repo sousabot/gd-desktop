@@ -1,4 +1,4 @@
-const { loadPros, matchPro } = require('./spectate-pros');
+const { loadPros, matchPro, tagGames } = require('./spectate-pros');
 
 const QUEUE_NAMES = {
   420: 'Solo/Duo',
@@ -72,6 +72,15 @@ async function getActiveGame(riotFetch, platform, puuid) {
   }
 }
 
+async function getFeatured(riotFetch, platform) {
+  try {
+    const data = await riotFetch(`https://${platform}.api.riotgames.com/lol/spectator/v5/featured-games`);
+    return Array.isArray(data?.gameList) ? data.gameList : [];
+  } catch {
+    return [];
+  }
+}
+
 async function getLeague(riotFetch, platform, tier) {
   try {
     return await riotFetch(`https://${platform}.api.riotgames.com/lol/league/v4/${tier}leagues/by-queue/RANKED_SOLO_5x5`);
@@ -82,8 +91,29 @@ async function getLeague(riotFetch, platform, tier) {
 }
 
 function depthFor(platforms) {
-  if (platforms.length > 1) return { challenger: 20, grandmaster: 8 };
-  return { challenger: 60, grandmaster: 24 };
+  if (platforms.length > 1) return { challenger: 80, grandmaster: 40 };
+  return { challenger: 200, grandmaster: 80 };
+}
+
+function probeBudget(platformCount) {
+  return platformCount > 1 ? 72 : 120;
+}
+
+function interleave(queues) {
+  const out = [];
+  let i = 0;
+  let more = true;
+  while (more) {
+    more = false;
+    for (const queue of queues) {
+      if (i < queue.length) {
+        out.push(queue[i]);
+        more = true;
+      }
+    }
+    i += 1;
+  }
+  return out;
 }
 
 function leaguePlayers(data, cap, tier) {
@@ -192,7 +222,7 @@ function pickPlatforms(raw) {
 function createScanner({ riotFetch }) {
   const cache = new Map();
   const keys = new Map();
-  let scanning = false;
+  const inflight = new Set();
   let lastError = '';
 
   function remember(games) {
@@ -204,6 +234,8 @@ function createScanner({ riotFetch }) {
           gameId: game.gameId,
           queueId: game.queueId,
           rawPlatform: game.platform,
+          gameStartTime: game.gameStartTime || 0,
+          puuid: game.players?.find((p) => p.puuid)?.puuid || '',
         });
       }
     }
@@ -216,91 +248,149 @@ function createScanner({ riotFetch }) {
     });
   }
 
-  async function scanPlatform(platform, depth, champs, pros, ranks) {
-    const fetchedAt = Date.now();
-    const [challenger, grandmaster] = await Promise.all([
-      getLeague(riotFetch, platform, 'challenger'),
-      getLeague(riotFetch, platform, 'grandmaster'),
-    ]);
-    const pool = [
-      ...leaguePlayers(challenger, depth.challenger, 'CHALLENGER'),
-      ...leaguePlayers(grandmaster, depth.grandmaster, 'GRANDMASTER'),
-    ];
-    const seenPuuid = new Set();
-    const unique = pool.filter((p) => {
-      if (seenPuuid.has(p.puuid)) return false;
-      seenPuuid.add(p.puuid);
-      ranks.set(p.puuid, p);
-      return true;
-    });
+  function gameKey(game) {
+    return `${String(game.platformId || '').toUpperCase()}:${String(game.gameId)}`;
+  }
 
-    const found = new Map();
-    const inGame = new Set();
-    let limited = false;
-    await mapWithConcurrency(unique, 3, async (player) => {
-      if (limited || inGame.has(player.puuid)) return;
-      try {
-        const raw = await getActiveGame(riotFetch, platform, player.puuid);
-        if (!raw?.gameId) return;
-        const id = String(raw.gameId);
-        if (found.has(id)) return;
-        if (!RANKED_QUEUES.has(Number(raw.gameQueueConfigId))) return;
-        const game = toGame(raw, platform, champs, ranks, pros, fetchedAt);
-        found.set(id, game);
-        game.players.forEach((p) => { if (p.puuid) inGame.add(p.puuid); });
-      } catch (err) {
-        if (isNotFound(err)) return;
-        if (isRateLimited(err) || /\b(401|403)\b/.test(String(err.message || ''))) {
-          limited = true;
-          lastError = isRateLimited(err)
-            ? 'Rate limit hit while scanning live games.'
-            : 'Riot blocked the live-game scan.';
-          return;
-        }
-      }
-    });
-    return { games: [...found.values()], limited };
+  function writeCache(list, games, extra = {}) {
+    remember(games);
+    const key = list.slice().sort().join(',');
+    const snap = {
+      ok: true,
+      games: strip(games),
+      updatedAt: Date.now(),
+      platforms: list,
+      source: 'riot-ladder',
+      note: extra.limited ? lastError : '',
+      trackedPros: extra.trackedPros || 0,
+      ...extra,
+    };
+    cache.set(key, snap);
+    if (list.length > 1) {
+      list.forEach((platform) => {
+        cache.set(platform, {
+          ...snap,
+          platforms: [platform],
+          games: snap.games.filter((g) => g.platform === platform),
+        });
+      });
+    }
+    return snap;
   }
 
   async function refresh(platforms) {
     const list = pickPlatforms(platforms.join ? platforms.join(',') : platforms);
     const key = list.slice().sort().join(',');
-    if (scanning) return cache.get(key) || emptySnap(list, true);
-    scanning = true;
+    if (inflight.has(key)) return cache.get(key) || emptySnap(list, true);
+    inflight.add(key);
     lastError = '';
+    const prevGames = cache.get(key)?.games || [];
+    if (prevGames.length) writeCache(list, prevGames, { scanning: true, limited: false });
     try {
       const depth = depthFor(list);
       const [champs, pros] = await Promise.all([championMap(), loadPros()]);
       const ranks = new Map();
-      const games = [];
+      const found = new Map();
+      const inGame = new Set();
       let limited = false;
-      for (const platform of list) {
-        const part = await scanPlatform(platform, depth, champs, pros, ranks);
-        games.push(...part.games);
-        if (part.limited) {
-          limited = true;
-          break;
+
+      const addGame = (game) => {
+        if (!game?.gameId) return;
+        const id = gameKey(game);
+        if (found.has(id)) return;
+        found.set(id, game);
+        (game.players || []).forEach((p) => { if (p.puuid) inGame.add(p.puuid); });
+        writeCache(list, [...found.values()], {
+          scanning: true,
+          limited,
+          trackedPros: pros.size || 0,
+        });
+      };
+
+      const ladders = await mapWithConcurrency(list, list.length, async (platform) => {
+        try {
+          const [challenger, grandmaster] = await Promise.all([
+            getLeague(riotFetch, platform, 'challenger'),
+            getLeague(riotFetch, platform, 'grandmaster'),
+          ]);
+          return { platform, challenger, grandmaster };
+        } catch (err) {
+          if (isRateLimited(err)) {
+            limited = true;
+            lastError = 'Rate limit hit while scanning live games.';
+          }
+          return { platform, challenger: { entries: [] }, grandmaster: { entries: [] } };
         }
+      });
+
+      const queues = ladders.map((row) => {
+        const pool = [
+          ...leaguePlayers(row.challenger, depth.challenger, 'CHALLENGER'),
+          ...leaguePlayers(row.grandmaster, depth.grandmaster, 'GRANDMASTER'),
+        ];
+        const unique = [];
+        pool.forEach((player) => {
+          if (ranks.has(player.puuid)) return;
+          ranks.set(player.puuid, player);
+          unique.push({ ...player, platform: row.platform });
+        });
+        return unique;
+      });
+
+      const featured = await mapWithConcurrency(list, list.length, async (platform) => ({
+        platform,
+        games: await getFeatured(riotFetch, platform),
+      }));
+      const fetchedAt = Date.now();
+      featured.forEach((row) => {
+        row.games.forEach((raw) => {
+          if (!RANKED_QUEUES.has(Number(raw.gameQueueConfigId))) return;
+          const onLadder = (raw.participants || []).some((p) => p.puuid && ranks.has(p.puuid));
+          if (!onLadder) return;
+          addGame(toGame(raw, row.platform, champs, ranks, pros, fetchedAt));
+        });
+      });
+
+      const toProbe = interleave(queues)
+        .filter((player) => !inGame.has(player.puuid))
+        .slice(0, probeBudget(list.length));
+
+      await mapWithConcurrency(toProbe, 6, async (player) => {
+        if (limited || inGame.has(player.puuid)) return;
+        try {
+          const raw = await getActiveGame(riotFetch, player.platform, player.puuid);
+          if (!raw?.gameId) return;
+          if (!RANKED_QUEUES.has(Number(raw.gameQueueConfigId))) return;
+          addGame(toGame(raw, player.platform, champs, ranks, pros, Date.now()));
+        } catch (err) {
+          if (isNotFound(err)) return;
+          if (isRateLimited(err) || /\b(401|403)\b/.test(String(err.message || ''))) {
+            limited = true;
+            lastError = isRateLimited(err)
+              ? 'Rate limit hit while scanning live games.'
+              : 'Riot blocked the live-game scan.';
+          }
+        }
+      });
+
+      if (limited) {
+        prevGames.forEach((game) => {
+          const id = gameKey(game);
+          if (!found.has(id)) found.set(id, game);
+        });
       }
-      remember(games);
-      const snap = {
-        ok: true,
-        games: strip(games),
-        updatedAt: Date.now(),
-        platforms: list,
+
+      const tagged = await tagGames([...found.values()]);
+      return writeCache(list, tagged, {
         scanning: false,
         limited,
-        source: 'riot-ladder',
-        note: limited ? lastError : '',
         trackedPros: pros.size || 0,
-      };
-      cache.set(key, snap);
-      return snap;
+      });
     } catch (err) {
       lastError = err.message || 'Could not scan live games.';
       const prev = cache.get(key);
       if (prev?.games?.length) {
-        return { ...prev, scanning: false, note: lastError };
+        return writeCache(list, prev.games, { scanning: false, limited: true, trackedPros: prev.trackedPros || 0 });
       }
       return {
         ok: false,
@@ -312,7 +402,7 @@ function createScanner({ riotFetch }) {
         source: 'riot-ladder',
       };
     } finally {
-      scanning = false;
+      inflight.delete(key);
     }
   }
 
@@ -322,7 +412,7 @@ function createScanner({ riotFetch }) {
       games: [],
       updatedAt: 0,
       platforms,
-      scanning: busy || scanning,
+      scanning: !!busy || inflight.has(platforms.slice().sort().join(',')),
       source: 'riot-ladder',
       trackedPros: 0,
     };
@@ -331,8 +421,21 @@ function createScanner({ riotFetch }) {
   function snapshot(platforms, opts = {}) {
     const list = pickPlatforms(Array.isArray(platforms) ? platforms.join(',') : platforms);
     const key = list.slice().sort().join(',');
-    const hit = cache.get(key);
-    const base = hit ? { ...hit, scanning: scanning || hit.scanning } : emptySnap(list, scanning);
+    let hit = cache.get(key);
+    if (!hit && list.length === 1) {
+      for (const [cacheKey, snap] of cache) {
+        if (!cacheKey.includes(list[0]) || !snap?.games) continue;
+        hit = {
+          ...snap,
+          platforms: list,
+          games: snap.games.filter((g) => g.platform === list[0]),
+        };
+        break;
+      }
+    }
+    const base = hit
+      ? { ...hit, scanning: inflight.has(key) || hit.scanning }
+      : emptySnap(list, inflight.has(key));
     if (!opts.keys) return base;
     return {
       ...base,
@@ -355,10 +458,12 @@ function createScanner({ riotFetch }) {
       gameId: String(game.gameId),
       queueId: game.queueId,
       rawPlatform: game.platform,
+      gameStartTime: game.gameStartTime || 0,
+      puuid: game.players?.find((p) => p.puuid)?.puuid || game.puuid || '',
     });
   }
 
-  async function start(intervalMs = 120000) {
+  async function start(intervalMs = 180000) {
     refresh(DEFAULT_PLATFORMS).catch(() => {});
     setInterval(() => {
       refresh(DEFAULT_PLATFORMS).catch(() => {});
@@ -373,8 +478,16 @@ function createScanner({ riotFetch }) {
     cache.set(key, {
       ...payload,
       games: strip(payload.games),
-      scanning: false,
+      scanning: !!payload.scanning,
     });
+  }
+
+  async function decorate(payload) {
+    if (!payload?.games?.length) return payload;
+    return {
+      ...payload,
+      games: await tagGames(payload.games),
+    };
   }
 
   return {
@@ -383,6 +496,7 @@ function createScanner({ riotFetch }) {
     getLaunch,
     storeLaunch,
     ingest,
+    decorate,
     start,
     DEFAULT_PLATFORMS,
     pickPlatforms,

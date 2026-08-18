@@ -10,7 +10,7 @@ const { getVideoMode, ensureBorderless, enableFullscreenOptimizations } = requir
 try { app.overwolf?.disableAnonymousAnalytics?.(); } catch { /* stock Electron */ }
 
 app.commandLine.appendSwitch('enable-features', 'OverlayScrollbar');
-app.setAppUserModelId('com.gdesports.desktop');
+app.setAppUserModelId('com.riftlol.desktop');
 recorder.prepare();
 
 const gotLock = app.requestSingleInstanceLock();
@@ -59,9 +59,9 @@ function createTray() {
   if (image.isEmpty()) image = nativeImage.createEmpty();
   else image = image.resize({ width: 32, height: 32 });
   tray = new Tray(image);
-  tray.setToolTip('GD Esports');
+  tray.setToolTip('Rift.lol');
   tray.setContextMenu(Menu.buildFromTemplate([
-    { label: 'Open GD Esports', click: () => showMainWindow() },
+    { label: 'Open Rift.lol', click: () => showMainWindow() },
     { type: 'separator' },
     { label: 'Close', click: () => quitApp() },
   ]));
@@ -74,10 +74,10 @@ function createWindow() {
     height: 860,
     minWidth: 1100,
     minHeight: 720,
-    backgroundColor: '#00000000',
+    backgroundColor: '#0b0e16',
     icon: path.join(__dirname, 'icon.png'),
     frame: false,
-    transparent: true,
+    transparent: false,
     roundedCorners: true,
     hasShadow: true,
     maximizable: false,
@@ -173,6 +173,7 @@ app.whenReady().then(() => {
   require('./spectate').register(ipcMain, { riotFetch: riotIpc.riotFetch });
   registerStatsHandlers(ipcMain);
   registerFeedbackHandlers(ipcMain);
+  require('./season-peak')(ipcMain);
   recorder.register(ipcMain);
   require('./updater').register({
     getWindow: () => mainWindow,

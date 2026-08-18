@@ -1,5 +1,6 @@
 ﻿import React, { useEffect, useMemo, useRef, useState } from 'react';
 import './Replays.css';
+import { useI18n } from '../i18n/LocaleContext';
 
 const api = typeof window !== 'undefined' ? window.replaysAPI : null;
 const NO_SEGS = [];
@@ -28,15 +29,15 @@ function dayKey(ms) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-function dayLabel(key) {
+function dayLabel(key, t) {
   const [y, m, d] = key.split('-').map(Number);
   const date = new Date(y, m - 1, d);
   const today = new Date();
   const same = date.toDateString() === today.toDateString();
-  if (same) return 'Today';
+  if (same) return t('replays.today');
   const yest = new Date();
   yest.setDate(today.getDate() - 1);
-  if (date.toDateString() === yest.toDateString()) return 'Yesterday';
+  if (date.toDateString() === yest.toDateString()) return t('replays.yesterday');
   return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
 }
 
@@ -366,8 +367,8 @@ function ReplayPlayer({ src, durationHint, label, startAt = 0, segments = [], ma
 }
 
 export default function Replays() {
+  const { t } = useI18n();
   const [status, setStatus] = useState(null);
-  const [settings, setSettings] = useState({ autoRecord: true, clipKills: true });
   const [matches, setMatches] = useState([]);
   const [playing, setPlaying] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -379,7 +380,9 @@ export default function Replays() {
   const [selected, setSelected] = useState(() => new Set());
   const [preparing, setPreparing] = useState(false);
 
-  const items = useMemo(() => flattenClips(matches), [matches]);
+  const items = useMemo(() => flattenClips(matches).map((item) => (
+    item.full ? { ...item, label: t('replays.fullMatch'), clip: { ...item.clip, label: t('replays.fullMatch') } } : item
+  )), [matches, t]);
   const champs = useMemo(() => [...new Set(items.map((i) => i.champion).filter(Boolean))].sort(), [items]);
   const days = useMemo(() => [...new Set(items.map((i) => dayKey(i.at)))], [items]);
 
@@ -413,9 +416,8 @@ export default function Replays() {
     if (!api) return undefined;
     let off = () => {};
     (async () => {
-      const [st, se] = await Promise.all([api.getStatus(), api.getSettings()]);
+      const st = await api.getStatus();
       setStatus(st);
-      setSettings(se);
       await refreshList();
     })();
     off = api.onStatus((next) => {
@@ -428,11 +430,6 @@ export default function Replays() {
       clearInterval(tick);
     };
   }, []);
-
-  async function patchSettings(next) {
-    if (!api) return;
-    setSettings(await api.setSettings(next));
-  }
 
   async function playItem(item) {
     if (!api) return;
@@ -525,8 +522,8 @@ export default function Replays() {
     return (
       <div className="rp-page">
         <div className="rp-empty">
-          <h2>Replays need the desktop app</h2>
-          <p>Open GD Esports as the Electron app to record matches.</p>
+          <h2>{t('replays.needAppTitle')}</h2>
+          <p>{t('replays.needApp')}</p>
         </div>
       </div>
     );
@@ -541,8 +538,8 @@ export default function Replays() {
     <div className="rp-page">
       <header className="rp-head">
         <div>
-          <h1>Replays <span>Beta · {items.length} clip{items.length === 1 ? '' : 's'}</span></h1>
-          <p>Records League of Legends (TM) Client only. Use borderless or windowed — exclusive fullscreen cannot be captured. Alt-tab pauses so your desktop never lands in the file. Kill clips are cut on Stop.</p>
+          <h1>{t('replays.title')} <span>{t('replays.beta', { n: items.length, clips: items.length === 1 ? t('replays.clip') : t('replays.clips') })}</span></h1>
+          <p>{t('replays.blurb')}</p>
         </div>
         <div className="rp-head-actions">
           {recording ? (
@@ -560,42 +557,55 @@ export default function Replays() {
               }}
               disabled={busy || finalizing}
             >
-              {finalizing ? 'Finalizing…' : 'Stop'}
+              {finalizing ? t('replays.finalizing') : t('replays.stop')}
             </button>
           ) : (
-            <button
-              type="button"
-              className="rp-btn"
-              onClick={async () => {
-                setBusy(true);
-                try {
-                  await api.start();
-                  await refreshList();
-                } finally {
-                  setBusy(false);
-                }
-              }}
-              disabled={busy}
-            >
-              Record now
-            </button>
+            <>
+              <button
+                type="button"
+                className={`rp-btn rp-btn-ghost${status?.autoRecord ? ' is-on' : ''}`}
+                onClick={async () => {
+                  if (!api?.setSettings) return;
+                  const next = await api.setSettings({ autoRecord: !status?.autoRecord });
+                  setStatus((prev) => ({ ...(prev || {}), autoRecord: !!next?.autoRecord }));
+                }}
+              >
+                {status?.autoRecord ? t('replays.autoOn') : t('replays.autoOff')}
+              </button>
+              <button
+                type="button"
+                className="rp-btn rp-btn-ghost"
+                onClick={async () => {
+                  setBusy(true);
+                  try {
+                    await api.start();
+                    await refreshList();
+                  } finally {
+                    setBusy(false);
+                  }
+                }}
+                disabled={busy}
+              >
+                {t('replays.recordNow')}
+              </button>
+            </>
           )}
-          <button type="button" className="rp-btn rp-btn-ghost" onClick={() => api.openFolder()}>Open folder</button>
+          <button type="button" className="rp-btn rp-btn-ghost" onClick={() => api.openFolder()}>{t('replays.openFolder')}</button>
           {selecting ? (
             <>
-              <button type="button" className="rp-btn rp-btn-ghost" onClick={selectAllFiltered} disabled={!filtered.length}>Select all</button>
+              <button type="button" className="rp-btn rp-btn-ghost" onClick={selectAllFiltered} disabled={!filtered.length}>{t('replays.selectAll')}</button>
               <button
                 type="button"
                 className="rp-btn rp-btn-stop"
                 onClick={askDeleteSelected}
                 disabled={busy || !selected.size}
               >
-                Delete{selected.size ? ` (${selected.size})` : ''}
+                {t('replays.delete')}{selected.size ? ` (${selected.size})` : ''}
               </button>
-              <button type="button" className="rp-btn rp-btn-ghost" onClick={toggleSelectMode}>Cancel</button>
+              <button type="button" className="rp-btn rp-btn-ghost" onClick={toggleSelectMode}>{t('replays.cancel')}</button>
             </>
           ) : (
-            <button type="button" className="rp-btn rp-btn-ghost" onClick={toggleSelectMode} disabled={!items.length}>Select</button>
+            <button type="button" className="rp-btn rp-btn-ghost" onClick={toggleSelectMode} disabled={!items.length}>{t('replays.select')}</button>
           )}
         </div>
       </header>
@@ -604,40 +614,32 @@ export default function Replays() {
         <div className={`rp-live${finalizing ? ' is-live' : recording ? ' is-rec' : inGame ? ' is-live' : ''}`}>
           <span className="rp-dot" />
           {finalizing
-            ? 'Finalizing skippable MP4…'
+            ? t('replays.finalizeNote')
             : recording
               ? (pausedRec
-                ? 'Paused — alt-tab back to League'
-                : `Recording ${status.champion || ''} ${fmtTime(status.gameTime)}${status.source ? ` · ${status.source}` : ''}`)
-              : inGame ? 'In game' : 'Waiting for a game'}
+                ? t('replays.recPaused')
+                : t('replays.recLive', { champ: status.champion || '', time: fmtTime(status.gameTime) }))
+              : inGame ? t('replays.inGame') : t('replays.waiting')}
         </div>
-        <label className="rp-check">
-          <input type="checkbox" checked={!!settings.autoRecord} onChange={(e) => patchSettings({ autoRecord: e.target.checked })} />
-          Auto-record when a game starts
-        </label>
-        <label className="rp-check">
-          <input type="checkbox" checked={!!settings.clipKills} onChange={(e) => patchSettings({ clipKills: e.target.checked })} />
-          Clip around my kills
-        </label>
       </div>
 
       {status?.error ? <div className="rp-banner is-err">{status.error}</div> : null}
       {status?.warning && !status?.error ? <div className="rp-banner">{status.warning}</div> : null}
-      {preparing ? <div className="rp-banner">Building a skippable MP4…</div> : null}
+      {preparing ? <div className="rp-banner">{t('replays.preparing')}</div> : null}
 
       <div className="rp-filters">
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search clips"
+          placeholder={t('replays.search')}
         />
         <select value={champFilter} onChange={(e) => setChampFilter(e.target.value)}>
-          <option value="all">All champions</option>
+          <option value="all">{t('replays.allChamps')}</option>
           {champs.map((c) => <option key={c} value={c}>{c}</option>)}
         </select>
         <select value={dayFilter} onChange={(e) => setDayFilter(e.target.value)}>
-          <option value="all">By day</option>
-          {days.map((d) => <option key={d} value={d}>{dayLabel(d)}</option>)}
+          <option value="all">{t('replays.byDay')}</option>
+          {days.map((d) => <option key={d} value={d}>{dayLabel(d, t)}</option>)}
         </select>
       </div>
 
@@ -658,26 +660,26 @@ export default function Replays() {
               <strong>{playing.item?.champion || 'Clip'}</strong>
               <span>{playing.label} · {modeLabel(playing.item?.match?.gameMode)}</span>
             </div>
-            <button type="button" className="rp-btn rp-btn-ghost" onClick={() => setPlaying(null)}>Close</button>
-            <button type="button" className="rp-btn rp-btn-ghost" onClick={() => setPendingDelete({ type: 'match', id: playing.matchId })}>Delete</button>
+            <button type="button" className="rp-btn rp-btn-ghost" onClick={() => setPlaying(null)}>{t('replays.close')}</button>
+            <button type="button" className="rp-btn rp-btn-ghost" onClick={() => setPendingDelete({ type: 'match', id: playing.matchId })}>{t('replays.delete')}</button>
           </div>
         </div>
       ) : null}
 
       {!items.length ? (
         <div className="rp-empty">
-          <h2>No recordings yet</h2>
-          <p>Queue in borderless or windowed mode, then press Record now or leave Auto-record on. Exclusive fullscreen and the League launcher cannot be captured. GD saves the full match plus a clip for each of your kills.</p>
+          <h2>{t('replays.emptyTitle')}</h2>
+          <p>{t('replays.empty')}</p>
         </div>
       ) : !filtered.length ? (
         <div className="rp-empty">
-          <h2>No clips match</h2>
-          <p>Try another champion or clear the search.</p>
+          <h2>{t('replays.noMatchTitle')}</h2>
+          <p>{t('replays.noMatch')}</p>
         </div>
       ) : (
         groups.map(([key, group]) => (
           <section key={key} className="rp-group">
-            <h2>{dayLabel(key)} <span>{group.length} clip{group.length === 1 ? '' : 's'}</span></h2>
+            <h2>{dayLabel(key, t)} <span>{group.length} {group.length === 1 ? t('replays.clip') : t('replays.clips')}</span></h2>
             <div className="rp-grid">
               {group.map((item) => (
                 <button

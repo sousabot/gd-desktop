@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { championIconUrl, getChampionIndex, getSkinsMeta, skinImageUrls, uniqueChampions } from '../lib/skinArt';
+import { useI18n } from '../i18n/LocaleContext';
 import './Collections.css';
 
 function fmtRp(n) {
@@ -79,6 +80,7 @@ function ChampCard({ champ, champIndex }) {
 }
 
 export default function Collections() {
+  const { t } = useI18n();
   const [data, setData] = useState(null);
   const [meta, setMeta] = useState({ byId: new Map(), total: 0 });
   const [champIndex, setChampIndex] = useState({ version: '', byKey: new Map() });
@@ -165,11 +167,11 @@ export default function Collections() {
   const waiting = !data?.connected;
   const reason = data?.reason || 'client-closed';
   const waitText = {
-    'no-api': 'Restart the desktop app to enable Collections.',
-    'not-logged-in': 'League Client is open — log in to your account, then refresh.',
-    'inventory-failed': 'Could not read inventory from the League Client.',
-    'client-closed': 'Open the League Client and log in, then refresh.',
-  }[reason] || 'Open the League Client and log in, then refresh.';
+    'no-api': t('collections.clientClosed'),
+    'not-logged-in': t('collections.clientClosed'),
+    'inventory-failed': t('collections.invFail'),
+    'client-closed': t('collections.clientClosed'),
+  }[reason] || t('collections.clientClosed');
 
   const skinsOwned = ownedSkins.length;
   const skinsTotal = meta.total || data?.skinsTotal || 0;
@@ -178,33 +180,33 @@ export default function Collections() {
     <div className="cl-page">
       <header className="cl-head">
         <div>
-          <h1>Collections</h1>
+          <h1>{t('collections.title')}</h1>
           <p>
             {data?.connected
-              ? `From the League Client · ${data.summoner?.displayName || data.summoner?.gameName || 'logged in'}`
-              : 'Reads owned skins from the League Client on this PC'}
+              ? t('collections.fromClient', { name: data.summoner?.displayName || data.summoner?.gameName || 'logged in' })
+              : t('collections.offline')}
           </p>
         </div>
         <button type="button" className="cl-refresh" onClick={() => load(true)} disabled={loading || !hasApi}>
-          {loading ? 'Loading…' : 'Refresh'}
+          {loading ? t('collections.loading') : t('collections.refresh')}
         </button>
       </header>
 
       {waiting ? (
         <div className="cl-empty">
-          <h2>{loading ? 'Checking League Client…' : 'Client not connected'}</h2>
-          <p>{loading ? 'Looking for a logged-in League Client.' : waitText}</p>
+          <h2>{loading ? t('collections.checkingTitle') : t('collections.disconnected')}</h2>
+          <p>{loading ? t('collections.checking') : waitText}</p>
         </div>
       ) : (
         <>
           <section className="cl-stats">
             <div>
               <strong>{skinsOwned}</strong>
-              <span>/ {skinsTotal} skins</span>
+              <span>/ {skinsTotal} {t('collections.skins')}</span>
             </div>
             <div>
               <strong>{champs.filter((c) => c.owned).length}</strong>
-              <span>/ {champs.length} champions</span>
+              <span>/ {champs.length} {t('collections.champions')}</span>
             </div>
             <div>
               <strong>{fmtRp(data.rpValue)}</strong>
@@ -216,7 +218,7 @@ export default function Collections() {
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search skins or champions"
+              placeholder={t('collections.search')}
             />
             <div className="cl-tabs">
               <button type="button" className={tab === 'skins' ? 'is-on' : ''} onClick={() => setTab('skins')}>

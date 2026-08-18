@@ -1,8 +1,7 @@
-# GD Esports Desktop
+# Rift.lol
 
-A League of Legends stats tracker, styled like DPM.LOL with a GD Esports
-identity (violet + gold, Space Grotesk headers, mono stat numbers), built
-as an Electron + React (Vite) app.
+A League of Legends stats tracker for Windows (violet + gold, Space Grotesk
+headers, mono stat numbers), built as an Electron + React (Vite) app.
 
 **This is a fresh scaffold, not a merge of your previous `gd-desktop`
 project.** Your earlier screenshots only showed filenames
@@ -14,7 +13,7 @@ the new base and port over anything custom you want to keep.
 ## Product site
 
 The public landing page, privacy policy, and terms live in `docs/`.
-GitHub Pages serves that folder at `https://sousabot.github.io/gd-desktop/`.
+GitHub Pages serves that folder at `https://sousabot.github.io/rift-desktop/`.
 
 ```bash
 npm run dist          # Windows installer + portable
@@ -27,17 +26,17 @@ Do not put `RIOT_API_KEY` in a public release. A public app needs a backend that
 
 The desktop app can call Riot through `server/` so the key never ships in the `.exe`.
 
-1. Deploy the repo as a Render Web Service (`render.yaml`). Set `RIOT_API_KEY`, **`GD_APP_TOKEN`**, and `DISCORD_WEBHOOK_URL` if you want in-app feedback.
+1. Deploy the repo as a Render Web Service (`render.yaml`). Set `RIOT_API_KEY`, **`RIFT_APP_TOKEN`**, and `DISCORD_WEBHOOK_URL` if you want in-app feedback.
 2. Put the same values in `client.env` (gitignored). `npm run dist` creates this file and generates a token if it is empty:
 
 ```
-GD_API_URL=https://your-service.onrender.com
-GD_APP_TOKEN=the-same-token-as-render
+RIFT_API_URL=https://your-service.onrender.com
+RIFT_APP_TOKEN=the-same-token-as-render
 ```
 
 The hosted proxy refuses Riot and feedback calls without that token. Local `npm run server` with an empty token only accepts localhost.
 
-3. `npm run dist` and send **`release\GD Esports-Setup-0.1.2.exe`** (the installer). Portable still works, but it cannot auto-update. Local `npm run dev` still uses `.env` (set `GD_USE_LOCAL_KEY=1` to skip the proxy).
+3. `npm run dist` and send **`release\Rift.lol-Setup-0.1.9.exe`** (the installer). Portable still works, but it cannot auto-update. Local `npm run dev` still uses `.env` (set `RIFT_USE_LOCAL_KEY=1` to skip the proxy).
 
 Windows SmartScreen will warn (the exe is unsigned). Tell testers: **More info → Run anyway**. Do not send an older exe that bundled a key.
 
@@ -76,7 +75,7 @@ Do not ship `.env` / `RIOT_API_KEY` in a public binary.
 ## Auto-updates
 
 A **portable** `.exe` cannot replace itself while it is running. In-app
-updates only work for people who installed **GD Esports-Setup-x.x.x.exe**.
+updates only work for people who installed **Rift.lol-Setup-x.x.x.exe**.
 
 After that, the app checks GitHub Releases on launch (and every few hours).
 Installed copies download the new build in the background and show a
@@ -101,10 +100,10 @@ That builds Setup + portable and publishes a GitHub Release with
 `latest.yml` (required). The installed app reads that file and updates.
 
 If you already ran `npm run dist`, you can upload these files to a
-Release tagged `v0.1.2` instead:
+Release tagged `v0.1.9` instead:
 
-- `GD Esports-Setup-0.1.2.exe`
-- `GD Esports-Setup-0.1.2.exe.blockmap`
+- `Rift.lol-Setup-0.1.9.exe`
+- `Rift.lol-Setup-0.1.9.exe.blockmap`
 - `latest.yml`
 
 Keep the Setup artifact name exactly like that. Do not upload only the
@@ -142,10 +141,10 @@ main process (plain Node, no CORS) and does the real HTTP calls;
   profile view; the leaderboard page pulls up to 50 entries in one call
   (that's within one League-v4 request, so it's fine) but if you add
   bulk match-fetching across many players you'll want a cache layer.
-- **Region** comes from the Link Account picker, then GD probes the real
+- **Region** comes from the Link Account picker, then Rift.lol probes the real
   League shard so NA/KR/etc. do not silently load as EUW.
 - **Champion/profile icon CDN** uses the current Data Dragon version from
   `https://ddragon.leagueoflegends.com/api/versions.json`.
 - **No public Riot key in the client** — a downloadable app must call your
-  own backend with `GD_APP_TOKEN`. Personal keys stay in local `.env` for development only.
+  own backend with `RIFT_APP_TOKEN`. Personal keys stay in local `.env` for development only.
 - **Overlays** stay off. In-game HUD injection is not Riot-safe.

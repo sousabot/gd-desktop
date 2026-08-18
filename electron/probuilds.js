@@ -1,6 +1,7 @@
 const cache = new Map();
 const TTL_MS = 30 * 60 * 1000;
 const ROLE = { Top: 'Top', Jungle: 'Jungle', Mid: 'Mid', ADC: 'Bot', Support: 'Support' };
+const FIELDS = 'Link,Team,Champion,IngameRole,DateTime_UTC,Items,KeystoneRune,PrimaryTree,SecondaryTree';
 
 function esc(value) {
   return String(value || '').replace(/"/g, '');
@@ -14,9 +15,9 @@ function cargoUrl({ champion, role }) {
     action: 'cargoquery',
     format: 'json',
     origin: '*',
-    limit: '8',
+    limit: '25',
     tables: 'ScoreboardPlayers',
-    fields: 'Link,Team,Champion,IngameRole,DateTime_UTC,Items,KeystoneRune,PrimaryTree,SecondaryTree',
+    fields: FIELDS,
     where,
     order_by: 'DateTime_UTC DESC',
   });
@@ -59,11 +60,14 @@ async function query(champion, role) {
   const res = await fetch(url, {
     headers: {
       Accept: 'application/json',
-      'User-Agent': 'GDEsportsDesktop/0.1.0 (Leaguepedia cargo; draft probuilds)',
+      'User-Agent': 'RiftDesktop/0.1.9 (https://github.com/sousabot/rift-desktop; draft-probuilds)',
     },
+    signal: AbortSignal.timeout(12000),
   });
   if (!res.ok) throw new Error(`Leaguepedia ${res.status}`);
-  return mapRows(await res.json());
+  const json = await res.json();
+  if (json.error) throw new Error(json.error.info || 'Leaguepedia cargo error');
+  return mapRows(json);
 }
 
 async function listProbuilds({ champion, role } = {}) {

@@ -5,15 +5,15 @@ export default function StatCard({ label, value, delta, trend, history = [] }) {
   const inferredTrend = trend || (delta?.startsWith('-') ? 'down' : delta?.startsWith('+') ? 'up' : 'flat');
 
   return (
-    <div className="gd-stat-card">
-      <div className="gd-stat-card__top">
-        <span className="gd-stat-card__label">{label}</span>
+    <div className="rift-stat-card">
+      <div className="rift-stat-card__top">
+        <span className="rift-stat-card__label">{label}</span>
         <Sparkline points={history} trend={inferredTrend} />
       </div>
-      <div className="gd-stat-card__bottom">
-        <span className="gd-stat-card__value gd-mono">{value}</span>
+      <div className="rift-stat-card__bottom">
+        <span className="rift-stat-card__value rift-mono">{value}</span>
         {delta && (
-          <span className={`gd-stat-card__delta gd-mono gd-stat-card__delta--${inferredTrend}`}>{delta}</span>
+          <span className={`rift-stat-card__delta rift-mono rift-stat-card__delta--${inferredTrend}`}>{delta}</span>
         )}
       </div>
     </div>

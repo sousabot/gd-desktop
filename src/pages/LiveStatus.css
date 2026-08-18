@@ -4,7 +4,7 @@
   display: flex;
   flex-direction: column;
   background: #0e1018;
-  color: var(--gd-text-primary);
+  color: var(--rift-text-primary);
   padding: 10px 12px 10px;
   box-sizing: border-box;
 }
@@ -25,10 +25,16 @@
 .lv-page--live .lv-head h1 { font-size: 16px; }
 .lv-head h1, .lv-empty h1 {
   margin: 0;
-  font-family: var(--gd-font-display);
+  font-family: var(--rift-font-display);
   font-size: 24px; font-weight: 700; letter-spacing: -0.03em;
 }
-.lv-sub { margin-top: 2px; font-size: 12px; color: var(--gd-text-muted); }
+.lv-sub { margin-top: 2px; font-size: 12px; color: var(--rift-text-muted); }
+.lv-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
 .lv-refresh {
   background: rgba(255,255,255,0.06);
   border: 1px solid rgba(255,255,255,0.1);
@@ -36,16 +42,42 @@
   font-weight: 700; font-size: 12px; cursor: pointer;
 }
 .lv-refresh:disabled { opacity: 0.6; cursor: default; }
+.lv-spectate {
+  background: var(--rift-violet);
+  border: 1px solid transparent;
+  color: #fff;
+  padding: 8px 14px;
+  border-radius: 10px;
+  font-weight: 800;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.lv-spectate:hover { filter: brightness(1.08); }
+.lv-spectate:disabled { opacity: 0.6; cursor: default; filter: none; }
+.lv-spectate-err {
+  margin-top: 4px;
+  text-align: center;
+  font-size: 12px;
+  color: #ff7b86;
+}
+.lv-spectate-hint {
+  margin-top: 2px;
+  text-align: center;
+  font-size: 11px;
+  color: var(--rift-text-muted);
+}
 .lv-loading, .lv-empty, .lv-idle {
   background: #12121b; border: 1px solid rgba(255,255,255,0.06);
   border-radius: 16px; padding: 28px 22px;
 }
-.lv-empty p, .lv-idle p { margin: 8px 0 0; color: var(--gd-text-muted); }
+.lv-empty p, .lv-idle p { margin: 8px 0 0; color: var(--rift-text-muted); }
 .lv-idle { text-align: center; }
 .lv-idle h2 { margin: 10px 0 0; font-size: 18px; }
 .lv-idle-dot {
   width: 10px; height: 10px; border-radius: 50%; margin: 0 auto;
-  background: var(--gd-text-faint);
+  background: var(--rift-text-faint);
 }
 
 .lv-match {
@@ -74,22 +106,27 @@
 }
 .lv-timer {
   display: flex; align-items: center; gap: 8px;
-  font-family: var(--gd-font-mono); font-weight: 700;
+  font-family: var(--rift-font-mono); font-weight: 700;
 }
 .lv-timer-dot {
   width: 8px; height: 8px; border-radius: 50%; background: #ff4d6d;
   animation: lv-pulse 1.4s ease-in-out infinite;
 }
 @keyframes lv-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
-.lv-timer-queue { font-size: 13px; color: var(--gd-text-muted); font-family: var(--gd-font-body); }
+.lv-timer-queue { font-size: 13px; color: var(--rift-text-muted); font-family: var(--rift-font-body); }
 .lv-timer-clock { font-size: 20px; }
 
 .lv-bans { display: flex; gap: 5px; }
 .lv-match-bar .lv-bans:last-child { justify-content: flex-end; }
-.lv-bans--empty { font-size: 11px; color: var(--gd-text-faint); }
-.lv-ban { position: relative; }
-.lv-ban img, .lv-ban .gd-champ-icon { filter: saturate(0.7) brightness(0.7); border-radius: 6px; }
-.lv-ban::after {
+.lv-bans--empty { font-size: 11px; color: var(--rift-text-faint); }
+.lv-ban { position: relative; width: 26px; height: 26px; }
+.lv-ban img, .lv-ban .rift-champ-icon { filter: saturate(0.7) brightness(0.7); border-radius: 6px; }
+.lv-ban-empty {
+  display: block; width: 26px; height: 26px; border-radius: 6px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px dashed rgba(255, 255, 255, 0.12);
+}
+.lv-ban:not(.is-empty)::after {
   content: '';
   position: absolute; inset: 6px 4px auto 4px; height: 2px;
   background: #ff5c68; transform: rotate(-28deg); opacity: 0.9;
@@ -113,7 +150,7 @@
   height: 28px;
 }
 .lv-roles-tag img,
-.lv-roles-tag .gd-role-icon,
+.lv-roles-tag .rift-role-icon,
 .lv-roles-tag .lv-role-icon {
   width: 16px;
   height: 16px;
@@ -246,7 +283,7 @@
   gap: 8px;
 }
 .lv-card-spells, .lv-card-runes { display: flex; align-items: center; gap: 4px; }
-.lv-card .gd-spell-icon, .lv-card .gd-rune-icon {
+.lv-card .rift-spell-icon, .lv-card .rift-rune-icon {
   border-radius: 50%;
   background: #0c0e16;
   box-shadow: 0 0 0 1px rgba(255,255,255,0.16);
@@ -268,5 +305,5 @@
 .lv-checked {
   flex-shrink: 0;
   margin-top: 6px;
-  font-size: 11px; color: var(--gd-text-faint);
+  font-size: 11px; color: var(--rift-text-faint);
 }

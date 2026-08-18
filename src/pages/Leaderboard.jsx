@@ -4,6 +4,7 @@ import { getTopLeague } from '../services/riotApi';
 import { champIconUrl, platformLabel, useDdragonVersion } from '../services/ddragon';
 import { playerSearchPath } from '../lib/playerRoute';
 import { useSession } from '../state/SessionContext';
+import { useI18n } from '../i18n/LocaleContext';
 import RoleIcon from '../components/RoleIcon';
 import './Leaderboard.css';
 
@@ -137,6 +138,7 @@ function PodiumCard({ row, place, emblem, region }) {
 
 export default function Leaderboard() {
   const { session } = useSession();
+  const { t } = useI18n();
   const platform = session?.platform || 'euw1';
   const region = session?.region || 'europe';
   const regionTag = platformLabel(platform);
@@ -184,7 +186,7 @@ export default function Leaderboard() {
     const known = Object.values(counts).reduce((a, b) => a + b, 0);
     const pct = {};
     ROLES.forEach((r) => {
-      pct[r] = known >= 8 ? ((counts[r] / known) * 100).toFixed(1) : '—';
+      pct[r] = known >= 5 ? ((counts[r] / known) * 100).toFixed(0) : '—';
     });
     return pct;
   }, [rows]);
@@ -201,7 +203,7 @@ export default function Leaderboard() {
   return (
     <div className="lb-page">
       <div className="lb-page-head">
-        <h1 className="lb-page-title">Leaderboard</h1>
+        <h1 className="lb-page-title">{t('leaderboard.title')}</h1>
         <div className="lb-tabs">
           {TIERS.map((t) => (
             <button
@@ -223,7 +225,7 @@ export default function Leaderboard() {
             className={`lb-role-btn${role === 'All' ? ' is-on' : ''}`}
             onClick={() => setRole('All')}
           >
-            All
+            {t('leaderboard.all')}
           </button>
           {ROLES.map((r) => (
             <button
@@ -233,19 +235,19 @@ export default function Leaderboard() {
               title={r}
             >
               <RoleIcon role={r} size={22} />
-              <span className="lb-role-pct">{roleCounts[r]}%</span>
+              <span className="lb-role-pct">{roleCounts[r] === '—' ? '—' : `${roleCounts[r]}%`}</span>
             </button>
           ))}
         </div>
         <div className="lb-toolbar-right">
           <span className="lb-filter-chip">{regionTag} · Solo/Duo</span>
-          {enriching ? <span className="lb-filter-chip is-soft">Filling roles…</span> : null}
+          {enriching ? <span className="lb-filter-chip is-soft">{t('leaderboard.filling')}</span> : null}
         </div>
       </div>
 
       {error && !rows.length ? (
         <div className="lb-empty">
-          <span>{error.includes('desktop app') ? error : 'Could not load this ladder. Check the linked region and try again.'}</span>
+          <span>{error.includes('desktop app') ? error : t('leaderboard.fail')}</span>
         </div>
       ) : loading && !rows.length ? (
         <div className="lb-body">

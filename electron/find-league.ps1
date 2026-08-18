@@ -63,6 +63,8 @@ public class GdFind {
       var t = title.ToString();
       var c = cls.ToString();
       if (t.IndexOf("GD Esports", StringComparison.OrdinalIgnoreCase) >= 0) return true;
+      if (t.IndexOf("Rift.lol", StringComparison.OrdinalIgnoreCase) >= 0) return true;
+      if (t.IndexOf("RIFT.LOL", StringComparison.OrdinalIgnoreCase) >= 0) return true;
       bool byPid = pids.Count > 0 && pids.Contains(pid);
       bool byTitle = t.IndexOf("League of Legends (TM)", StringComparison.OrdinalIgnoreCase) >= 0
         || t.IndexOf("League of Legends (TM) Client", StringComparison.OrdinalIgnoreCase) >= 0;

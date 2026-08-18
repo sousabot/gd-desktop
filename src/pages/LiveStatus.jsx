@@ -4,13 +4,16 @@ import { getLatestMatchReview, getLiveGame } from '../services/riotApi';
 import { platformLabel } from '../services/ddragon';
 import { SpellIcon, RuneIcon, ChampionIcon } from '../components/GameIcons';
 import MatchReview from '../components/MatchReview';
-import { parsePlayerSearch, playerQuery, parseRiotId } from '../lib/playerRoute';
+import { parsePlayerSearch, playerSearchPath, parseRiotId } from '../lib/playerRoute';
 import { rememberPlayer } from '../lib/recentPlayers';
 import { apiUserMessage, noticeFromError, isNotFound } from '../lib/apiNotice';
 import { RANKED_QUEUE_IDS } from '../lib/queues';
 import { typicalLane } from '../lib/champLane';
 import { useSession } from '../state/SessionContext';
+import { useI18n } from '../i18n/LocaleContext';
+import { SPECTATE_DELAY_SEC, fmtClock, spectateWaitSec } from '../lib/spectateDelay';
 import RoleIcon from '../components/RoleIcon';
+import { padTeamBans } from '../lib/bans';
 import './LiveStatus.css';
 import CHALLENGER_IMG  from '../assets/ranks/CHALLENGER.webp';
 import GRANDMASTER_IMG from '../assets/ranks/GRANDMASTER_SMALL.webp';
@@ -45,9 +48,9 @@ function rankEmblem(label) {
   return `https://raw.communitydragon.org/latest/plugins/rcp-fe-lol-static-assets/global/default/ranked-emblem/emblem-${tier.toLowerCase()}.png`;
 }
 
-function rankLine(player) {
-  if (player.rankUnknown) return 'Rank unavailable';
-  if (!player.rank || player.rank === 'Unranked') return 'Unranked';
+function rankLine(player, t) {
+  if (player.rankUnknown) return t('live.rankUnknown');
+  if (!player.rank || player.rank === 'Unranked') return t('live.unranked');
   const lp = player.lp != null ? `${player.lp} LP` : '';
   return lp ? `${player.rank} · ${lp}` : player.rank;
 }
@@ -125,13 +128,14 @@ function TeamGrid({ players, ranked, red }) {
 }
 
 function BanRow({ bans, team }) {
-  const list = bans.filter((b) => b.teamId === team && b.champion);
-  if (!list.length) return <div className="lv-bans lv-bans--empty">No bans</div>;
+  const { t } = useI18n();
+  if (!bans?.length) return <div className="lv-bans lv-bans--empty">{t('live.noBans')}</div>;
+  const list = padTeamBans(bans, team);
   return (
     <div className="lv-bans">
       {list.map((b, i) => (
-        <div key={`${b.champion}-${i}`} className="lv-ban">
-          <ChampionIcon name={b.champion} size={26} />
+        <div key={`${b.champion || b.championId || 'empty'}-${i}`} className={`lv-ban${b.champion ? '' : ' is-empty'}`}>
+          {b.champion ? <ChampionIcon name={b.champion} size={26} /> : <span className="lv-ban-empty" />}
         </div>
       ))}
     </div>
@@ -140,6 +144,7 @@ function BanRow({ bans, team }) {
 
 function PlayerCard({ player, ranked }) {
   const navigate = useNavigate();
+  const { t } = useI18n();
   const emblem = rankEmblem(player.rank);
   const record = overallLine(player);
   const unranked = player.rankUnknown || !player.rank || player.rank === 'Unranked';
@@ -148,7 +153,7 @@ function PlayerCard({ player, ranked }) {
   const open = () => {
     if (!canOpen) return;
     rememberPlayer(riotId);
-    navigate(`/live${playerQuery(riotId)}`);
+    navigate(playerSearchPath(riotId));
   };
 
   return (
@@ -201,7 +206,7 @@ function PlayerCard({ player, ranked }) {
         </div>
         <div className="lv-card-meta">
           {emblem && !unranked && <img src={emblem} alt="" className="lv-card-emblem" />}
-          <span>{rankLine(player)}</span>
+          <span>{rankLine(player, t)}</span>
           {record && <span className="lv-card-record">{record}</span>}
         </div>
       </div>
@@ -251,6 +256,7 @@ function keepKnownRanks(prev, next) {
 
 export default function LiveStatus() {
   const { session } = useSession();
+  const { t } = useI18n();
   const [searchParams] = useSearchParams();
   const [game, setGame] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -259,7 +265,11 @@ export default function LiveStatus() {
   const [now, setNow] = useState(Date.now());
   const [recap, setRecap] = useState(null);
   const [error, setError] = useState('');
+  const [launching, setLaunching] = useState(false);
+  const [launchErr, setLaunchErr] = useState('');
+  const [launchNote, setLaunchNote] = useState('');
   const hadGameRef = useRef(false);
+  const spectateApi = typeof window !== 'undefined' ? window.spectateAPI : null;
 
   const viewed = parseRiotId(parsePlayerSearch(searchParams), session?.tagLine || '');
   const lookup = {
@@ -294,14 +304,19 @@ export default function LiveStatus() {
       setGame(null);
       setError(
         isNotFound(err)
-          ? 'Could not find that Riot ID. Check the name, tag, and region.'
-          : (apiUserMessage(err) || 'Could not check spectator.')
+          ? t('live.notFound')
+          : (apiUserMessage(err) || t('live.fail'))
       );
       setCheckedAt(new Date());
     } finally {
       if (!silent) setLoading(false);
     }
   };
+
+  useEffect(() => {
+    setLaunchErr('');
+    setLaunching(false);
+  }, [lookup.gameName, lookup.tagLine, lookup.platform]);
 
   useEffect(() => { check(); /* eslint-disable-line */ }, [lookup.gameName, lookup.tagLine, lookup.platform]);
 
@@ -319,17 +334,55 @@ export default function LiveStatus() {
   }, [game]);
 
   const elapsed = game ? (game.gameLength || 0) + Math.floor((now - fetchedAt) / 1000) : 0;
+  const waitSec = game
+    ? (game.gameStartTime ? spectateWaitSec(game.gameStartTime, now) : Math.max(0, SPECTATE_DELAY_SEC - elapsed))
+    : 0;
   const ranked = game ? RANKED_QUEUE_IDS.has(game.queueId) : false;
   const useLanes = game ? LANE_QUEUES.has(Number(game.queueId)) : false;
   const blue = game ? (useLanes ? orderByLane(game.blue) : (game.blue || [])) : [];
   const red = game ? (useLanes ? orderByLane(game.red) : (game.red || [])) : [];
+  const canSpectate = Boolean(
+    spectateApi
+    && game?.encryptionKey
+    && game?.gameId
+    && game?.platformId
+    && game.source !== 'live-client'
+  );
+
+  async function spectateLive() {
+    if (!canSpectate || launching) return;
+    if (waitSec > 0) {
+      setLaunchErr(t('spectate.waitDelay', { time: fmtClock(waitSec) }));
+      return;
+    }
+    setLaunching(true);
+    setLaunchErr('');
+    setLaunchNote('');
+    try {
+      const result = await spectateApi.launch({
+        gameId: game.gameId,
+        platformId: game.platformId,
+        encryptionKey: game.encryptionKey,
+        queueId: game.queueId,
+        puuid: game.puuid,
+        rawPlatform: game.platform || lookup.platform,
+        gameStartTime: game.gameStartTime,
+      });
+      if (!result?.ok) setLaunchErr(result?.error || t('spectate.fail'));
+      else setLaunchNote(t('spectate.connecting'));
+    } catch (err) {
+      setLaunchErr(err.message || t('spectate.fail'));
+    } finally {
+      setLaunching(false);
+    }
+  }
 
   if (!lookup.gameName) {
     return (
       <div className="lv-page">
         <section className="lv-empty">
-          <h1>Live Status</h1>
-          <p>Search a Riot ID in the bar, or open a player from the leaderboard, to watch their live game.</p>
+          <h1>{t('live.title')}</h1>
+          <p>{t('live.empty')}</p>
         </section>
       </div>
     );
@@ -339,19 +392,36 @@ export default function LiveStatus() {
     <div className={`lv-page${game && !loading ? ' lv-page--live' : ''}`}>
       <header className="lv-head">
         <div>
-          <h1>Live Status</h1>
+          <h1>{t('live.title')}</h1>
           <div className="lv-sub">{label} · {platformLabel(lookup.platform)}</div>
         </div>
-        <button type="button" className="lv-refresh" onClick={check} disabled={loading}>
-          {loading ? 'Checking…' : 'Refresh'}
-        </button>
+        <div className="lv-head-actions">
+          {canSpectate && (
+            <button
+              type="button"
+              className="lv-spectate"
+              onClick={spectateLive}
+              disabled={launching || waitSec > 0}
+              title={waitSec > 0 ? t('spectate.waitDelay', { time: fmtClock(waitSec) }) : undefined}
+            >
+              {launching
+                ? t('live.starting')
+                : waitSec > 0
+                  ? t('spectate.wait', { time: fmtClock(waitSec) })
+                  : t('live.spectate')}
+            </button>
+          )}
+          <button type="button" className="lv-refresh" onClick={check} disabled={loading}>
+            {loading ? t('live.checking') : t('live.refresh')}
+          </button>
+        </div>
       </header>
 
       {loading ? (
-        <div className="lv-loading">Checking spectator…</div>
+        <div className="lv-loading">{t('live.loading')}</div>
       ) : error ? (
         <section className="lv-idle">
-          <h2>Could not load</h2>
+          <h2>{t('live.failTitle')}</h2>
           <p>{error}</p>
         </section>
       ) : game ? (
@@ -377,24 +447,31 @@ export default function LiveStatus() {
             </div>
           )}
           <TeamGrid players={red} ranked={ranked} red />
+          {launchErr && <div className="lv-spectate-err">{launchErr}</div>}
+          {launchNote && !launchErr && (
+            <div className="lv-spectate-hint">{launchNote}</div>
+          )}
+          {canSpectate && !launchErr && !launchNote && (
+            <div className="lv-spectate-hint">{t('live.hint')}</div>
+          )}
         </div>
       ) : (
         <section className="lv-idle">
           <div className="lv-idle-dot" />
-          <h2>Not in game</h2>
-          <p>{label} is not currently in a live match.</p>
+          <h2>{t('live.idleTitle')}</h2>
+          <p>{t('live.idleBody', { id: label })}</p>
         </section>
       )}
 
       {checkedAt && !game && (
-        <div className="lv-checked">Last checked {checkedAt.toLocaleTimeString()}</div>
+        <div className="lv-checked">{t('live.lastChecked', { time: checkedAt.toLocaleTimeString() })}</div>
       )}
 
       {recap && (
         <MatchReview
           game={recap}
           platform={lookup.platform}
-          kicker="Post-game recap"
+          kicker={t('live.recap')}
           onClose={() => setRecap(null)}
         />
       )}

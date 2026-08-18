@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 
-const FALLBACK_VERSION = '14.24.1';
+const FALLBACK_VERSION = '16.16.1';
 let cached = FALLBACK_VERSION;
 let pending = null;
 
@@ -53,36 +53,72 @@ export function itemIconUrl(id, version = cached) {
   return `https://ddragon.leagueoflegends.com/cdn/${version}/img/item/${id}.png`;
 }
 
-export function itemIconCdragon(id) {
-  return `https://cdn.communitydragon.org/latest/item/${id}/icon`;
-}
-
-let itemNamePromise = null;
-export function getItemNameIndex() {
-  if (!itemNamePromise) {
-    itemNamePromise = getDdragonVersion()
+let itemJsonPromise = null;
+function getItemJson() {
+  if (!itemJsonPromise) {
+    itemJsonPromise = getDdragonVersion()
       .then((v) => fetch(`https://ddragon.leagueoflegends.com/cdn/${v}/data/en_US/item.json`))
       .then((r) => r.json())
-      .then((data) => {
-        const byName = {};
-        Object.entries(data.data || {}).forEach(([id, item]) => {
-          const name = String(item.name || '').trim().toLowerCase();
-          if (!name) return;
-          const num = Number(id);
-          byName[name] = num;
-          byName[name.replace(/['’]/g, '')] = num;
-        });
-        return byName;
-      })
-      .catch(() => ({}));
+      .catch(() => ({ data: {} }));
   }
-  return itemNamePromise;
+  return itemJsonPromise;
+}
+
+function itemNameRank(id, item) {
+  const n = Number(id);
+  const onSr = item?.maps?.['11'] === true && n < 10000;
+  if (onSr && item.inStore !== false) return 4;
+  if (onSr) return 3;
+  if (item?.maps?.['11'] === true) return 2;
+  if (n < 10000) return 1;
+  return 0;
+}
+
+export function getItemNameIndex() {
+  return getItemJson().then((data) => {
+    const byName = {};
+    const rankByKey = {};
+    Object.entries(data.data || {}).forEach(([id, item]) => {
+      const name = String(item.name || '').trim().toLowerCase();
+      if (!name) return;
+      const num = Number(id);
+      const rank = itemNameRank(id, item);
+      const keys = [name, name.replace(/['’]/g, '')];
+      keys.forEach((key) => {
+        if (!byName[key] || rank > (rankByKey[key] || -1)) {
+          byName[key] = num;
+          rankByKey[key] = rank;
+        }
+      });
+    });
+    return byName;
+  });
+}
+
+export function getItemCatalog() {
+  return getItemJson().then((data) => {
+    const map = {};
+    Object.entries(data.data || {}).forEach(([id, item]) => {
+      map[Number(id)] = {
+        name: item.name || '',
+        from: (item.from || []).map(Number).filter((n) => n > 0),
+        tags: item.tags || [],
+      };
+    });
+    return map;
+  });
 }
 
 export function useItemNameIndex() {
   const [index, setIndex] = useState({});
   useEffect(() => { getItemNameIndex().then(setIndex); }, []);
   return index;
+}
+
+export function useItemCatalog() {
+  const [catalog, setCatalog] = useState({});
+  useEffect(() => { getItemCatalog().then(setCatalog); }, []);
+  return catalog;
 }
 
 export const PLATFORM_LABELS = {

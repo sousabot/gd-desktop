@@ -2,7 +2,6 @@ import React, { useEffect, useState } from 'react';
 import {
   champIconUrl,
   champLoadingUrl,
-  itemIconCdragon,
   itemIconUrl,
   runeIconUrl,
   spellIconUrl,
@@ -21,7 +20,7 @@ export function ChampionIcon({ name, size = 36, className = '', title }) {
       src={src}
       alt={name || ''}
       title={title || name}
-      className={`gd-champ-icon ${className}`.trim()}
+      className={`rift-champ-icon ${className}`.trim()}
       style={{ width: size, height: size }}
       onError={() => setSrc(champIconUrl('Aatrox', version))}
     />
@@ -36,13 +35,13 @@ export function ChampionPortrait({ name, className = '' }) {
     setFailed(!name);
   }, [name]);
   if (!name || failed) {
-    return <div className={`gd-champ-portrait is-empty ${className}`.trim()} />;
+    return <div className={`rift-champ-portrait is-empty ${className}`.trim()} />;
   }
   return (
     <img
       src={src}
       alt={name}
-      className={`gd-champ-portrait ${className}`.trim()}
+      className={`rift-champ-portrait ${className}`.trim()}
       onError={() => setFailed(true)}
     />
   );
@@ -50,19 +49,19 @@ export function ChampionPortrait({ name, className = '' }) {
 
 export function ItemIcon({ id, size = 28, title }) {
   const version = useDdragonVersion();
-  const [src, setSrc] = useState(() => (id ? itemIconCdragon(id) : ''));
-  useEffect(() => { setSrc(id ? itemIconCdragon(id) : ''); }, [id]);
-  if (!id) {
-    return <span className="gd-item-empty" style={{ width: size, height: size }} title={title} />;
+  const [failed, setFailed] = useState(false);
+  useEffect(() => { setFailed(false); }, [id, version]);
+  if (!id || failed) {
+    return <span className="rift-item-empty" style={{ width: size, height: size }} title={title} />;
   }
   return (
     <img
-      src={src}
+      src={itemIconUrl(id, version)}
       alt={title || ''}
       title={title || ''}
-      className="gd-item-icon"
+      className="rift-item-icon"
       style={{ width: size, height: size }}
-      onError={() => setSrc(itemIconUrl(id, version))}
+      onError={() => setFailed(true)}
     />
   );
 }
@@ -74,7 +73,7 @@ export function SpellIcon({ id, size = 22 }) {
     <img
       src={spellIconUrl(id, version, map)}
       alt=""
-      className="gd-spell-icon"
+      className="rift-spell-icon"
       style={{ width: size, height: size }}
     />
   );
@@ -85,13 +84,13 @@ export function RuneIcon({ id, size = 28 }) {
   const n = Number(id);
   const src = runeIconUrl(n, index);
   const name = index[n]?.name || '';
-  if (!src) return <span className="gd-item-empty" style={{ width: size, height: size }} />;
+  if (!src) return <span className="rift-item-empty" style={{ width: size, height: size }} />;
   return (
     <img
       src={src}
       alt={name}
       title={name}
-      className="gd-rune-icon"
+      className="rift-rune-icon"
       style={{ width: size, height: size }}
     />
   );

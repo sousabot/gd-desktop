@@ -18,7 +18,7 @@ export default function ApiNotice() {
   if (!notice) return null;
 
   return (
-    <div className={`gd-api-notice gd-api-notice--${notice.kind}`} role="status">
+    <div className={`rift-api-notice rift-api-notice--${notice.kind}`} role="status">
       <span>{notice.message}</span>
       <button type="button" onClick={() => setNotice(null)} aria-label="Dismiss">×</button>
     </div>

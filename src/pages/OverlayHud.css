@@ -1,6 +1,6 @@
-html.gd-overlay,
-html.gd-overlay body,
-html.gd-overlay #root {
+html.rift-overlay,
+html.rift-overlay body,
+html.rift-overlay #root {
   background: transparent !important;
   background-image: none !important;
   overflow: hidden;
@@ -63,13 +63,10 @@ html.gd-overlay #root {
 .ov-mark {
   width: 16px;
   height: 16px;
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
-  font-size: 7px;
-  font-weight: 800;
-  background: linear-gradient(135deg, #7c5cff, #ffb454);
-  color: #0b0c12;
+  border-radius: 4px;
+  object-fit: contain;
+  display: block;
+  background: #000;
 }
 .ov-brand {
   font-size: 12px;
@@ -105,7 +102,7 @@ html.gd-overlay #root {
 }
 .ov-label { font-weight: 600; letter-spacing: 0.04em; }
 .ov-now {
-  font-family: var(--gd-font-mono), 'JetBrains Mono', monospace;
+  font-family: var(--rift-font-mono), 'JetBrains Mono', monospace;
   font-weight: 700;
   min-width: 2.6em;
   text-align: right;
@@ -114,7 +111,7 @@ html.gd-overlay #root {
 .ov-now.is-ok { color: #3ecf8e; }
 .ov-sep { color: rgba(255,255,255,0.28); }
 .ov-tgt {
-  font-family: var(--gd-font-mono), 'JetBrains Mono', monospace;
+  font-family: var(--rift-font-mono), 'JetBrains Mono', monospace;
   color: rgba(210, 220, 240, 0.55);
   font-weight: 600;
   min-width: 2.6em;

@@ -1,25 +1,32 @@
-.gd-login-card { text-align: center; padding: 40px 30px; }
-.gd-login-mark { font-size: 26px; padding: 8px 16px; display: inline-block; margin-bottom: 16px; }
-.gd-login-card h1 { font-family: var(--gd-font-display); margin: 0 0 8px; }
-.gd-login-card p { margin: 0 0 20px; }
-.gd-login-linked { color: var(--gd-text-primary) !important; }
+.rift-login-card { text-align: center; padding: 40px 30px; }
+.rift-login-logo {
+  display: block;
+  width: min(280px, 100%);
+  height: auto;
+  margin: 0 auto 18px;
+  object-fit: contain;
+  mix-blend-mode: screen;
+}
+.rift-login-card h1 { font-family: var(--rift-font-display); margin: 0 0 8px; }
+.rift-login-card p { margin: 0 0 20px; }
+.rift-login-linked { color: var(--rift-text-primary) !important; }
 
-.gd-login-btn {
+.rift-login-btn {
   display: inline-block;
-  background: linear-gradient(135deg, var(--gd-violet), #6a4de8);
+  background: linear-gradient(135deg, var(--rift-violet), #6a4de8);
   color: white;
   text-decoration: none;
   padding: 11px 22px;
-  border-radius: var(--gd-radius-sm);
+  border-radius: var(--rift-radius-sm);
   font-weight: 600;
 }
-.gd-login-alt {
+.rift-login-alt {
   display: flex; justify-content: center; gap: 14px;
   margin-top: 14px;
 }
-.gd-login-alt a, .gd-login-alt button {
-  background: none; border: none; color: var(--gd-text-muted);
+.rift-login-alt a, .rift-login-alt button {
+  background: none; border: none; color: var(--rift-text-muted);
   font-size: 12px; font-weight: 700; cursor: pointer;
-  text-decoration: none; font-family: var(--gd-font-body);
+  text-decoration: none; font-family: var(--rift-font-body);
 }
-.gd-login-alt button { color: #ff8a93; }
+.rift-login-alt button { color: #ff8a93; }

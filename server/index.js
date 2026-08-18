@@ -1,8 +1,8 @@
-// GD Esports API proxy — holds the Riot key on the server.
+// Rift.lol API proxy — holds the Riot key on the server.
 // Desktop builds call this instead of talking to Riot with a key in the .exe.
 //
 // Local:  npm run server
-// Host:   Render / Railway / Fly — set RIOT_API_KEY, GD_APP_TOKEN, and optional DISCORD_WEBHOOK_URL
+// Host:   Render / Railway / Fly — set RIOT_API_KEY, RIFT_APP_TOKEN, and optional DISCORD_WEBHOOK_URL
 
 const http = require('http');
 const path = require('path');
@@ -10,9 +10,11 @@ const crypto = require('crypto');
 const { URL } = require('url');
 
 require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
+const { normalizeEnv, appToken } = require('../electron/rift-env');
+normalizeEnv();
 
 const PORT = Number(process.env.PORT) || 8787;
-const TOKEN = String(process.env.GD_APP_TOKEN || '').trim();
+const TOKEN = appToken();
 const WINDOW_MS = 60 * 1000;
 const MAX_PER_WINDOW = 200;
 const hits = new Map();
@@ -145,7 +147,7 @@ async function postDiscord(payload) {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      username: 'GD Desktop',
+      username: 'Rift.lol',
       embeds: [{
         title: `${kind}: ${title}`,
         description: message,
@@ -178,7 +180,7 @@ const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
 
   if (req.method === 'GET' && (url.pathname === '/' || url.pathname === '/health')) {
-    send(res, 200, { ok: true, service: 'gd-desktop-api' });
+    send(res, 200, { ok: true, service: 'rift-lol-api' });
     return;
   }
 
@@ -194,7 +196,7 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (!authorized(req)) {
-    console.log(`[gd-api] ${req.method} ${url.pathname} -> 401 unauthorized`);
+    console.log(`[rift-api] ${req.method} ${url.pathname} -> 401 unauthorized`);
     send(res, 401, { error: 'Unauthorized' });
     return;
   }
@@ -202,7 +204,7 @@ const server = http.createServer(async (req, res) => {
   try {
     if (req.method === 'GET' && url.pathname === '/v1/status') {
       const result = await proxyRiot('https://euw1.api.riotgames.com/lol/status/v4/platform-data');
-      console.log(`[gd-api] GET /v1/status -> ${result.status}`);
+      console.log(`[rift-api] GET /v1/status -> ${result.status}`);
       send(res, 200, { ok: result.ok, riotStatus: result.status, riotStatusText: result.statusText });
       return;
     }
@@ -211,12 +213,14 @@ const server = http.createServer(async (req, res) => {
       const platforms = spectateFeed.pickPlatforms(
         url.searchParams.get('platforms') || url.searchParams.get('platform') || '',
       );
+      const force = url.searchParams.get('force') === '1';
       const snap = spectateFeed.snapshot(platforms, { keys: true });
-      const stale = !snap.updatedAt || Date.now() - snap.updatedAt > 75000;
+      const stale = force || !snap.updatedAt || Date.now() - snap.updatedAt > 150000;
       if (stale) spectateFeed.refresh(platforms).catch((err) => {
-        console.log(`[gd-api] spectate refresh failed: ${err.message || err}`);
+        console.log(`[rift-api] spectate refresh failed: ${err.message || err}`);
       });
-      send(res, 200, { ...snap, scanning: stale || snap.scanning });
+      const next = spectateFeed.snapshot(platforms, { keys: true });
+      send(res, 200, { ...next, scanning: stale || next.scanning });
       return;
     }
 
@@ -227,7 +231,7 @@ const server = http.createServer(async (req, res) => {
         return;
       }
       const result = await proxyRiot(body.url);
-      console.log(`[gd-api] POST /v1/riot -> ${result.status} ${result.statusText}`);
+      console.log(`[rift-api] POST /v1/riot -> ${result.status} ${result.statusText}`);
       send(res, result.ok ? 200 : result.status, result.ok
         ? { data: result.data }
         : { error: `Riot API ${result.status} ${result.statusText}`, data: result.data });
@@ -242,18 +246,18 @@ const server = http.createServer(async (req, res) => {
 
     send(res, 404, { error: 'Not found' });
   } catch (err) {
-    console.log(`[gd-api] ${req.method} ${url.pathname} -> ${err.status || 500}`);
+    console.log(`[rift-api] ${req.method} ${url.pathname} -> ${err.status || 500}`);
     send(res, err.status || 500, { error: err.message || 'Server error' });
   }
 });
 
 server.listen(PORT, () => {
-  console.log(`[gd-api] listening on :${PORT}`);
-  if (!process.env.RIOT_API_KEY) console.warn('[gd-api] RIOT_API_KEY is not set');
+  console.log(`[rift-api] listening on :${PORT}`);
+  if (!process.env.RIOT_API_KEY) console.warn('[rift-api] RIOT_API_KEY is not set');
   if (!TOKEN) {
-    console.warn('[gd-api] GD_APP_TOKEN is empty — only localhost may call /v1/*');
+    console.warn('[rift-api] RIFT_APP_TOKEN is empty — only localhost may call /v1/*');
   } else {
-    console.log('[gd-api] GD_APP_TOKEN required for /v1/*');
+    console.log('[rift-api] RIFT_APP_TOKEN required for /v1/*');
   }
   spectateFeed.start().catch(() => {});
 });

@@ -49,8 +49,27 @@ function normItem(name) {
     .replace(/\s+/g, ' ');
 }
 
+function normKeystone(name) {
+  return String(name || '')
+    .replace(/\[\[|\]\]/g, '')
+    .replace(/^file:/i, '')
+    .replace(/\.png$/i, '')
+    .replace(/['’]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+}
+
+const KEYSTONE_BY_NORM = Object.fromEntries(
+  Object.entries(KEYSTONE_ID).map(([label, id]) => [normKeystone(label), id]),
+);
+
 export function keystoneId(name) {
-  return KEYSTONE_ID[name] || null;
+  const n = normKeystone(name);
+  if (!n) return null;
+  if (KEYSTONE_BY_NORM[n]) return KEYSTONE_BY_NORM[n];
+  const hit = Object.keys(KEYSTONE_BY_NORM).find((key) => n.includes(key) || key.includes(n));
+  return hit ? KEYSTONE_BY_NORM[hit] : null;
 }
 
 export function treeId(name) {
@@ -70,6 +89,111 @@ export function resolveItemId(name, index = {}) {
   if (!key) return null;
   const mapped = ITEM_ALIASES[key] || key;
   return index[mapped] || index[key] || index[String(name || '').trim().toLowerCase()] || null;
+}
+
+function tallyItems(rows) {
+  const counts = new Map();
+  (rows || []).forEach((row) => {
+    buildItemNames(row.items).forEach((name) => {
+      const cur = counts.get(name) || { name, n: 0, w: 0 };
+      cur.n += 1;
+      if (row.won === true) cur.w += 1;
+      counts.set(name, cur);
+    });
+  });
+  const known = (rows || []).some((row) => row.won === true || row.won === false);
+  return [...counts.values()]
+    .sort((a, b) => {
+      if (known) {
+        const ar = a.w / a.n;
+        const br = b.w / b.n;
+        if (br !== ar) return br - ar;
+      }
+      return b.n - a.n;
+    })
+    .slice(0, 6);
+}
+
+export function itemsForKeystone(rows = [], perkId) {
+  const all = rows || [];
+  if (!all.length) {
+    return { items: [], games: 0, wins: 0, matched: false, mixed: false, hasResults: false, hasWins: false };
+  }
+  const keyed = perkId ? all.filter((row) => keystoneId(row.keystone) === perkId) : [];
+  const mixed = !keyed.length;
+  const sample = mixed ? all : keyed;
+  const items = tallyItems(sample);
+  const wins = sample.filter((row) => row.won === true).length;
+  const known = sample.some((row) => row.won === true || row.won === false);
+  return {
+    items,
+    games: sample.length,
+    wins,
+    matched: !mixed,
+    mixed,
+    hasResults: items.length > 0,
+    hasWins: known,
+  };
+}
+
+const WIKI_ROLE = { Top: 'Top', Jungle: 'Jungle', Mid: 'Mid', ADC: 'Bot', Support: 'Support' };
+
+function cargoWhere(champion, role) {
+  const name = String(champion || '').replace(/"/g, '').trim();
+  const wikiRole = WIKI_ROLE[role] || role || '';
+  if (wikiRole) return `Champion="${name}" AND IngameRole="${wikiRole}" AND DateTime_UTC IS NOT NULL`;
+  return `Champion="${name}" AND DateTime_UTC IS NOT NULL`;
+}
+
+function mapWikiRows(payload) {
+  const rows = Array.isArray(payload?.cargoquery) ? payload.cargoquery : [];
+  return rows.map((entry, i) => {
+    const row = entry?.title || {};
+    const link = String(row.Link || '').trim();
+    return {
+      id: `${link || 'p'}-${row.DateTime_UTC || i}`,
+      player: link.replace(/\s*\(.*\)$/, '').trim() || link,
+      team: row.Team || '',
+      role: row.IngameRole || '',
+      at: row.DateTime_UTC || '',
+      items: String(row.Items || '').split(';').map((part) => part.trim()).filter(Boolean),
+      keystone: row.KeystoneRune || '',
+      primary: row.PrimaryTree || '',
+      secondary: row.SecondaryTree || '',
+    };
+  }).filter((row) => row.player);
+}
+
+async function cargoQuery(champion, role) {
+  const params = new URLSearchParams({
+    action: 'cargoquery',
+    format: 'json',
+    origin: '*',
+    limit: '25',
+    tables: 'ScoreboardPlayers',
+    fields: 'Link,Team,Champion,IngameRole,DateTime_UTC,Items,KeystoneRune,PrimaryTree,SecondaryTree',
+    where: cargoWhere(champion, role),
+    order_by: 'DateTime_UTC DESC',
+  });
+  const res = await fetch(`https://lol.fandom.com/api.php?${params.toString()}`, {
+    headers: { Accept: 'application/json' },
+  });
+  if (!res.ok) throw new Error(`Leaguepedia ${res.status}`);
+  const json = await res.json();
+  if (json.error) throw new Error(json.error.info || 'Leaguepedia cargo error');
+  return mapWikiRows(json);
+}
+
+export async function fetchProbuilds({ champion, role } = {}) {
+  const name = String(champion || '').trim();
+  if (!name) return { ok: true, rows: [] };
+  try {
+    let rows = role ? await cargoQuery(name, role) : [];
+    if (!rows.length) rows = await cargoQuery(name, '');
+    return { ok: true, rows, source: 'Leaguepedia' };
+  } catch (err) {
+    return { ok: false, rows: [], error: err.message || 'Could not load pro builds.' };
+  }
 }
 
 export function timeAgo(value) {

@@ -16,14 +16,47 @@ import {
 } from '../lib/draftAdvice';
 import { typicalLane } from '../lib/champLane';
 import { refreshRunePages } from '../lib/runePages';
-import { getDdragonVersion, useRuneTrees, champSpellImgUrl, champPassiveImgUrl, useItemNameIndex } from '../services/ddragon';
+import { getDdragonVersion, useRuneTrees, useRuneIndex, champSpellImgUrl, champPassiveImgUrl, champLoadingUrl, useItemNameIndex } from '../services/ddragon';
 import { getDraftPool } from '../services/riotApi';
-import { coreItemNames, buildItemNames, resolveItemId, keystoneId, timeAgo, treeId } from '../lib/probuilds';
+import { coreItemNames, buildItemNames, resolveItemId, keystoneId, timeAgo, treeId, itemsForKeystone, fetchProbuilds } from '../lib/probuilds';
 import { useSession } from '../state/SessionContext';
+import { useI18n } from '../i18n/LocaleContext';
 import './Draft.css';
 
 const ROLES = ['Top', 'Jungle', 'Mid', 'ADC', 'Support'];
 const POS_FROM_LCU = { Top: 'Top', Jungle: 'Jungle', Mid: 'Mid', ADC: 'ADC', Support: 'Support' };
+const champSplash = (key) =>
+  key ? `https://ddragon.leagueoflegends.com/cdn/img/champion/splash/${key}_0.jpg` : '';
+
+function RecArt({ champKey, featured }) {
+  const splash = champSplash(champKey);
+  const loading = champKey ? champLoadingUrl(champKey) : '';
+  const preferred = featured ? (splash || loading) : (loading || splash);
+  const fallback = featured ? loading : splash;
+  const [src, setSrc] = useState(preferred);
+  useEffect(() => {
+    setSrc(preferred);
+  }, [preferred]);
+  if (!src) return <span className="dr-rec-splash is-empty" />;
+  return (
+    <img
+      className="dr-rec-splash"
+      src={src}
+      alt=""
+      onError={() => {
+        if (fallback && src !== fallback) setSrc(fallback);
+      }}
+    />
+  );
+}
+
+function kitMix(info) {
+  const ad = Number(info?.attack) || 0;
+  const ap = Number(info?.magic) || 0;
+  const sum = ad + ap;
+  if (sum <= 0) return null;
+  return { ad: Math.round((ad / sum) * 100), ap: Math.round((ap / sum) * 100) };
+}
 const COMP_ROWS = [
   ['early', 'Early game'],
   ['mid', 'Mid game'],
@@ -58,22 +91,6 @@ function enrichSeat(seat, catalog) {
   };
 }
 
-function damageMix(champ) {
-  const ad = Number(champ?.info?.attack) || 0;
-  const ap = Number(champ?.info?.magic) || 0;
-  const tot = ad + ap;
-  if (tot <= 0) {
-    const tags = champ?.tags || [];
-    const phys = tags.some((t) => t === 'Marksman' || t === 'Fighter' || t === 'Assassin' || t === 'Tank');
-    const mag = tags.includes('Mage') || tags.includes('Support');
-    if (phys && mag) return { ad: 50, ap: 50 };
-    if (mag) return { ad: 20, ap: 80 };
-    if (phys) return { ad: 80, ap: 20 };
-    return { ad: 50, ap: 50 };
-  }
-  return { ad: Math.round((100 * ad) / tot), ap: 100 - Math.round((100 * ad) / tot) };
-}
-
 function banIds(session) {
   return (session?.bans || []).map((b) => (typeof b === 'object' ? b.id : b)).filter((id) => Number(id) > 0);
 }
@@ -82,22 +99,45 @@ function useProbuilds(champion, role) {
   const [rows, setRows] = useState([]);
   const [status, setStatus] = useState('idle');
   useEffect(() => {
-    if (!champion || !window.probuildsAPI?.list) {
+    if (!champion) {
       setRows([]);
       setStatus('idle');
       return undefined;
     }
     let alive = true;
     setStatus('loading');
-    window.probuildsAPI.list({ champion, role }).then((res) => {
-      if (!alive) return;
-      setRows(res.rows || []);
-      setStatus(res.ok ? 'ready' : 'error');
-    }).catch(() => {
+    const apply = (res) => {
+      if (!alive) return false;
+      const next = res?.rows || [];
+      if (res?.ok && next.length) {
+        setRows(next);
+        setStatus('ready');
+        return true;
+      }
+      if (res?.ok) {
+        setRows([]);
+        setStatus('ready');
+        return true;
+      }
+      return false;
+    };
+    const fail = () => {
       if (!alive) return;
       setRows([]);
       setStatus('error');
-    });
+    };
+    const fromWiki = () => fetchProbuilds({ champion, role }).then((res) => {
+      if (!apply(res)) fail();
+    }).catch(fail);
+
+    if (window.probuildsAPI?.list) {
+      window.probuildsAPI.list({ champion, role }).then((res) => {
+        if (apply(res)) return;
+        return fromWiki();
+      }).catch(fromWiki);
+    } else {
+      fromWiki();
+    }
     return () => { alive = false; };
   }, [champion, role]);
   return { rows, status };
@@ -105,6 +145,7 @@ function useProbuilds(champion, role) {
 
 export default function Draft() {
   const { session: account } = useSession();
+  const { t } = useI18n();
   const trees = useRuneTrees();
   const [session, setSession] = useState(null);
   const [catalog, setCatalog] = useState([]);
@@ -119,6 +160,7 @@ export default function Draft() {
   const [runeTick, setRuneTick] = useState(0);
   const [imported, setImported] = useState({ runes: false, spells: false, pageId: null });
   const [masteryOnly, setMasteryOnly] = useState(false);
+  const [offMeta, setOffMeta] = useState(false);
   const [pickMsg, setPickMsg] = useState('');
   const [kit, setKit] = useState(null);
 
@@ -227,7 +269,8 @@ export default function Draft() {
     pickable: live ? session.pickable : [],
     catalog,
     pool,
-  }), [live, activeRole, youChamp, enemyLane, allyDuo, enemies, allies, session, catalog, pool]);
+    offMeta,
+  }), [live, activeRole, youChamp, enemyLane, allyDuo, enemies, allies, session, catalog, pool, offMeta]);
 
   const banAdvice = useMemo(() => adviseBans({
     role: activeRole,
@@ -339,19 +382,19 @@ export default function Draft() {
         : 'League closed';
 
   const waitCopy = !session?.connected
-    ? { title: 'Waiting for match to start', body: 'Open the League client and queue. Draft opens when champion select starts.' }
+    ? { title: t('draft.waitTitle'), body: t('draft.waitBody') }
     : session?.source === 'in-game' || String(session?.gameflow || '').toUpperCase().includes('INPROGRESS')
-      ? { title: 'In game', body: 'Draft will open again in the next champion select.' }
-      : { title: 'Waiting for match to start', body: 'Queue into a match. This page fills in when champion select starts.' };
+      ? { title: t('draft.inGame'), body: t('draft.inGameBody') }
+      : { title: t('draft.waitTitle'), body: t('draft.waitQueue') };
 
   return (
     <div className="dr-page">
       <div className="dr-head">
         <div>
-          <h1>Draft</h1>
+          <h1>{t('draft.title')}</h1>
           <p className="dr-sub">
             {live
-              ? `${banPhase ? 'Ban phase' : phaseLabel(session.phase)} · ${activeRole}${allyDuo?.displayName ? ` · duo ${allyDuo.displayName}` : ''}`
+              ? `${banPhase ? t('draft.banPhase') : phaseLabel(session.phase)} · ${activeRole}${allyDuo?.displayName ? ` · duo ${allyDuo.displayName}` : ''}`
               : waitCopy.body}
           </p>
         </div>
@@ -368,8 +411,10 @@ export default function Draft() {
           <p>{waitCopy.body}</p>
         </div>
       ) : (
-        <>
+        <div className="dr-live">
           <DraftBoard
+            allyBans={session.allyBans}
+            enemyBans={session.enemyBans}
             bans={session.bans}
             allies={allyBoard}
             enemies={enemyBoard}
@@ -378,43 +423,46 @@ export default function Draft() {
           />
 
           <section className="dr-your">
-            <div className="dr-your-head">
-              <h2>Your pick</h2>
-              <span>GD matchup notes · Riot recommended pages</span>
-            </div>
-
             {lockedIn ? (
-              <Loadout
-                pickChamp={pickChamp}
-                pickGrade={pickGrade}
-                activeRole={activeRole}
-                roles={ROLES}
-                onRole={(r) => { setRole(r); setRoleLocked(true); }}
-                runePages={runePages}
-                runes={runes}
-                onRune={setRuneOption}
-                runesImported={runesImported}
-                spellsImported={spellsImported}
-                trees={trees}
-                kit={kit}
-                sending={sending}
-                onSend={sendRunes}
-                runeMsg={runeMsg}
-                disclaimer={advice.disclaimer}
-                proChamp={pickChamp?.name}
-              />
+              <>
+                <div className="dr-your-head">
+                  <h2>{t('draft.yourPick')}</h2>
+                </div>
+                <Loadout
+                  pickChamp={pickChamp}
+                  pickGrade={pickGrade}
+                  activeRole={activeRole}
+                  roles={ROLES}
+                  onRole={(r) => { setRole(r); setRoleLocked(true); }}
+                  runePages={runePages}
+                  runes={runes}
+                  onRune={setRuneOption}
+                  runesImported={runesImported}
+                  spellsImported={spellsImported}
+                  trees={trees}
+                  kit={kit}
+                  sending={sending}
+                  onSend={sendRunes}
+                  runeMsg={runeMsg}
+                  disclaimer={advice.disclaimer}
+                  proChamp={pickChamp?.name}
+                />
+              </>
             ) : (
               <PickSuggestions
+                title={t('draft.yourPick')}
                 banPhase={banPhase}
                 suggestions={suggestions}
                 featured={featured}
                 enemyLane={enemyLane}
                 activeRole={activeRole}
                 masteryOnly={masteryOnly}
+                offMeta={offMeta}
                 hasMastery={hasMastery}
                 canAct={canAct}
                 pickMsg={pickMsg}
                 onMastery={() => setMasteryOnly((v) => !v)}
+                onOffMeta={() => setOffMeta((v) => !v)}
                 onHover={hoverChamp}
                 onLock={() => lockChamp(featured)}
                 pool={pool}
@@ -423,18 +471,19 @@ export default function Draft() {
               />
             )}
           </section>
-        </>
+        </div>
       )}
     </div>
   );
 }
 
-function ProbuildsList({ champion, role }) {
+function ProbuildsList({ champion, role, hideEmpty = false }) {
   const { rows, status } = useProbuilds(champion, role);
   const itemsByName = useItemNameIndex();
   const [openId, setOpenId] = useState(null);
   useEffect(() => { setOpenId(null); }, [champion, role]);
   if (!champion) return null;
+  if (hideEmpty && !rows.length) return null;
   const open = rows.find((row) => row.id === openId) || null;
 
   if (open) {
@@ -519,16 +568,19 @@ function ProbuildsList({ champion, role }) {
 }
 
 function PickSuggestions({
+  title,
   banPhase,
   suggestions,
   featured,
   enemyLane,
   activeRole,
   masteryOnly,
+  offMeta,
   hasMastery,
   canAct,
   pickMsg,
   onMastery,
+  onOffMeta,
   onHover,
   onLock,
   pool,
@@ -537,69 +589,97 @@ function PickSuggestions({
 }) {
   return (
     <div className="dr-picks-wrap">
-      <div className="dr-rec-tools">
-        <button type="button" className="dr-lock" onClick={onLock} disabled={!featured || !canAct}>
-          {banPhase ? 'Ban' : 'Lock'}
-        </button>
-        <button
-          type="button"
-          className={`dr-filter${masteryOnly ? ' is-on' : ''}`}
-          onClick={onMastery}
-          disabled={!hasMastery}
-          title={hasMastery ? 'Only champions at mastery 3 or higher' : 'Link an account to filter by mastery'}
-        >
-          Mastery 3+
-        </button>
-        <span className="dr-rec-role" title={activeRole}>
-          <RoleIcon role={activeRole} size={16} />
-        </span>
+      <div className="dr-your-head">
+        <h2>{title}</h2>
+        <div className="dr-your-tools">
+          <button type="button" className="dr-lock" onClick={onLock} disabled={!featured || !canAct}>
+            {banPhase ? 'Ban' : 'Lock'}
+          </button>
+          <button
+            type="button"
+            className={`dr-mastery${masteryOnly ? ' is-on' : ''}`}
+            onClick={onMastery}
+            disabled={!hasMastery}
+            title={hasMastery ? 'Only champions at mastery 3 or higher' : 'Link an account to filter by mastery'}
+          >
+            <span>Mastery level</span>
+            <strong>3+</strong>
+          </button>
+          <button
+            type="button"
+            className="dr-offmeta"
+            onClick={onOffMeta}
+            aria-pressed={offMeta}
+          >
+            <span>Show off-meta</span>
+            <i className={`dr-switch${offMeta ? ' is-on' : ''}`}><em /></i>
+          </button>
+        </div>
       </div>
 
-      {!suggestions.length ? (
+      {!suggestions.length || !featured ? (
         <p className="dr-empty">
           {banPhase ? 'No ban suggestions left for this role.' : 'Waiting on the lobby.'}
         </p>
       ) : (
         <div className="dr-recs">
           {suggestions.map((c) => {
-            const grade = matchupGrade(c, enemyLane, activeRole);
             const on = featured?.id === c.id;
-            const mix = damageMix(c);
+            const grade = matchupGrade(c, enemyLane, activeRole);
             const mastery = pool.mastery?.[c.id]?.level || 0;
+            const games = pool.recent?.[c.id]?.games || 0;
+            const why = grade?.why || c.reasons?.[0] || '';
+            const mix = kitMix(c.info);
+            const label = grade?.grade || (mastery ? `M${mastery}` : '');
             return (
-              <button
-                key={c.id}
-                type="button"
-                className={`dr-rec${on ? ' is-on' : ''}`}
-                onClick={() => onHover(c)}
-              >
-                <span className="dr-rec-art">
-                  <ChampionPortrait name={c.key} />
-                  {grade?.grade ? (
-                    <span className={`dr-rec-score is-${grade.grade}`}>{grade.grade}</span>
-                  ) : null}
+              <div key={c.id} className={`dr-rec-col${on ? ' is-on' : ''}`}>
+                <span className={`dr-rec-delta${on ? ' is-on' : ''}${grade?.grade ? ` is-${grade.grade}` : ''}`}>
+                  {label}
                 </span>
-                {on ? (
-                  <span className="dr-rec-meta">
-                    <strong>{c.name}</strong>
-                    <em>{grade?.why || c.reasons[0] || `${activeRole} pick`}</em>
-                    {mastery ? <em>Mastery {mastery}</em> : null}
-                    <span className="dr-mix" title="Riot champion ratings, not live damage">
-                      <i className="is-ad" style={{ width: `${mix.ad}%` }} />
-                      <i className="is-ap" style={{ width: `${mix.ap}%` }} />
+                <button
+                  type="button"
+                  className={`dr-rec-card${on ? ' is-on' : ''}`}
+                  onClick={() => onHover(c)}
+                  title={why || c.name}
+                >
+                  <RecArt champKey={c.key} featured={on} />
+                  {on ? (
+                    <span className="dr-rec-foot">
+                      <span className="dr-rec-stats">
+                        <span>
+                          <b>{mastery || '—'}</b>
+                          <em>mastery</em>
+                        </span>
+                        <span>
+                          <b>{games || '—'}</b>
+                          <em>last 20</em>
+                        </span>
+                      </span>
+                      {why ? <span className="dr-rec-why">{why}</span> : null}
+                      {mix ? (
+                        <span
+                          className="dr-rec-mix"
+                          title="Riot champion attack vs magic ratings — not live damage"
+                        >
+                          <span className="dr-rec-mix-lab">
+                            <em>AD</em>
+                            <em>AP</em>
+                          </span>
+                          <span className="dr-rec-mix-bar">
+                            <i style={{ width: `${mix.ad}%` }} />
+                          </span>
+                        </span>
+                      ) : null}
                     </span>
-                    <small>AD {mix.ad} · AP {mix.ap}</small>
-                  </span>
-                ) : (
-                  <span className="dr-rec-name">{c.name}</span>
-                )}
-              </button>
+                  ) : null}
+                </button>
+              </div>
             );
           })}
         </div>
       )}
       {pickMsg ? <p className="dr-hint">{pickMsg}</p> : null}
-      <ProbuildsList champion={proChamp} role={activeRole} />
+      <ProbuildsList champion={proChamp} role={activeRole} hideEmpty />
       <p className="dr-disclaimer">{disclaimer}</p>
     </div>
   );
@@ -624,6 +704,10 @@ function Loadout({
   disclaimer,
   proChamp,
 }) {
+  const { rows, status } = useProbuilds(proChamp, activeRole);
+  const itemsByName = useItemNameIndex();
+  const selectedBuild = itemsForKeystone(rows, runes?.selectedPerkIds?.[0]);
+
   return (
     <>
       <div className="dr-your-select">
@@ -656,6 +740,11 @@ function Loadout({
               <p className="dr-empty">No rune page for this champion yet.</p>
             ) : runePages.map((page) => {
               const on = runes?.id === page.id;
+              const pageBuild = itemsForKeystone(rows, page.selectedPerkIds?.[0]);
+              const cores = pageBuild.items
+                .map((item) => ({ ...item, id: resolveItemId(item.name, itemsByName) }))
+                .filter((item) => item.id)
+                .slice(0, 4);
               return (
                 <button
                   key={page.id}
@@ -667,6 +756,13 @@ function Loadout({
                   <div>
                     <strong>{page.label}</strong>
                     <em>{page.why}</em>
+                    {cores.length ? (
+                      <span className="dr-build-items">
+                        {cores.map((item) => (
+                          <ItemIcon key={`${page.id}-${item.id}`} id={item.id} size={18} title={item.name} />
+                        ))}
+                      </span>
+                    ) : null}
                   </div>
                   <span className="dr-build-spells">
                     {(page.spells || []).map((id) => (
@@ -677,7 +773,7 @@ function Loadout({
               );
             })}
           </div>
-          <ProbuildsList champion={proChamp} role={activeRole} />
+          <ProbuildsList champion={proChamp} role={activeRole} hideEmpty />
         </aside>
 
         <div className="dr-your-main">
@@ -692,6 +788,51 @@ function Loadout({
               ))}
               {!runes?.spells?.length ? <p className="dr-empty">No summoner page yet.</p> : null}
             </div>
+          </div>
+
+          <div className="dr-block">
+            <header>
+              <div>
+                <h3>Items</h3>
+                {runes?.label ? <p className="dr-rune-kicker">{runes.label}</p> : null}
+              </div>
+            </header>
+            {status === 'loading' && !rows.length ? (
+              <p className="dr-empty">Loading recent pro games…</p>
+            ) : null}
+            {status === 'error' && !selectedBuild.hasResults ? (
+              <p className="dr-empty">Leaguepedia didn’t answer for items.</p>
+            ) : null}
+            {status !== 'loading' && status !== 'error' && !selectedBuild.hasResults ? (
+              <p className="dr-empty">No recent pro games on this champion.</p>
+            ) : null}
+            {selectedBuild.hasResults ? (
+              <>
+                <div className="dr-items">
+                  {selectedBuild.items.map((item) => {
+                    const id = resolveItemId(item.name, itemsByName);
+                    return (
+                      <span key={item.name} className="dr-item" title={item.name}>
+                        <ItemIcon id={id} size={40} title={item.name} />
+                        <em>{item.name}</em>
+                        {selectedBuild.hasWins ? (
+                          <b>{item.w}/{item.n}</b>
+                        ) : (
+                          <b>{item.n}g</b>
+                        )}
+                      </span>
+                    );
+                  })}
+                </div>
+                <p className="dr-hint">
+                  {selectedBuild.mixed
+                    ? `No games on this keystone — most built in ${selectedBuild.games} recent Leaguepedia games.`
+                    : selectedBuild.hasWins
+                      ? `Sorted by wins in ${selectedBuild.games} Leaguepedia games on this keystone — end-game items, not a sitewide winrate.`
+                      : `Most built in ${selectedBuild.games} Leaguepedia games on this keystone — end-game items, not a winrate.`}
+                </p>
+              </>
+            ) : null}
           </div>
 
           {kit?.spells?.length ? (
@@ -722,16 +863,19 @@ function Loadout({
 
           <div className="dr-block dr-block-runes">
             <header>
-              <h3>Runes</h3>
+              <div>
+                <h3>Runes</h3>
+                {runes?.label ? <p className="dr-rune-kicker">{runes.label}</p> : null}
+              </div>
               {runesImported ? <span className="dr-imported">Imported</span> : null}
             </header>
             <RuneTree page={runes} trees={trees} />
             {runes?.note ? <p className="dr-note">{runes.note}</p> : null}
+            <button type="button" className="dr-send" onClick={onSend} disabled={sending || !runes}>
+              {runes?.selectedPerkIds?.[0] ? <RuneIcon id={runes.selectedPerkIds[0]} size={20} /> : null}
+              {sending ? 'Sending…' : 'Send to League'}
+            </button>
           </div>
-
-          <button type="button" className="dr-send" onClick={onSend} disabled={sending || !runes}>
-            {sending ? 'Sending…' : `Send ${runes?.label || 'page'} to League`}
-          </button>
           {runeMsg ? <p className="dr-hint">{runeMsg}</p> : null}
           <p className="dr-disclaimer">{disclaimer}</p>
         </div>
@@ -740,10 +884,22 @@ function Loadout({
   );
 }
 
-function DraftBoard({ bans, allies, enemies, lean, sketch }) {
+function padBans(list, fallback = [], start = 0) {
+  const source = Array.isArray(list) ? list : fallback.slice(start, start + 5);
+  const out = source.filter((b) => b && (b.key || b.id)).slice(0, 5);
+  while (out.length < 5) out.push({ id: 0, key: null, name: null });
+  return out;
+}
+
+function DraftBoard({ bans, allyBans, enemyBans, allies, enemies, lean, sketch }) {
+  const flat = bans || [];
   return (
     <div className="dr-overview">
-      <LeanBar lean={lean} />
+      <LeanBar
+        lean={lean}
+        allyBans={padBans(allyBans, flat, 0)}
+        enemyBans={padBans(enemyBans, flat, 5)}
+      />
       <div className="dr-board">
         <TeamStrip seats={allies} others={enemies} />
         <div className="dr-comps">
@@ -753,7 +909,6 @@ function DraftBoard({ bans, allies, enemies, lean, sketch }) {
         </div>
         <TeamStrip seats={enemies} others={allies} enemy />
       </div>
-      <BanRow bans={bans} />
     </div>
   );
 }
@@ -800,9 +955,28 @@ function LaneRow({ seats }) {
   );
 }
 
-function LeanBar({ lean }) {
+function BanSlots({ bans, enemy }) {
+  return (
+    <div className={`dr-ban-row${enemy ? ' is-enemy' : ' is-ally'}`}>
+      {bans.map((ban, i) => (
+        <span
+          key={ban.id || `empty-${i}`}
+          className="dr-ban-slot"
+          title={ban.name || ban.key || 'Ban'}
+        >
+          {ban.key ? (
+            <ChampionIcon name={ban.key} size={32} title={ban.name || ban.key} />
+          ) : null}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+function LeanBar({ lean, allyBans, enemyBans }) {
   return (
     <div className={`dr-lean${lean.ready ? '' : ' is-wait'}`}>
+      <BanSlots bans={allyBans} />
       <b className="is-ally">{lean.ready ? `${lean.ally}%` : '—'}</b>
       <div className="dr-lean-mid">
         <span>Draft lean</span>
@@ -813,6 +987,7 @@ function LeanBar({ lean }) {
         <em>{lean.ready ? 'Matchup notes, not a live winrate' : 'Waiting on picks'}</em>
       </div>
       <b className="is-enemy">{lean.ready ? `${lean.enemy}%` : '—'}</b>
+      <BanSlots bans={enemyBans} enemy />
     </div>
   );
 }
@@ -843,20 +1018,10 @@ function DraftPortrait({ seat, enemy, grade }) {
   );
 }
 
-function BanRow({ bans }) {
-  const list = (bans || []).filter((b) => (typeof b === 'object' ? b.key : b));
-  if (!list.length) return null;
-  return (
-    <div className="dr-bans">
-      <span>Bans</span>
-      {list.map((b, i) => (
-        <ChampionIcon key={b.id || i} name={b.key} size={28} title={b.name || b.key} />
-      ))}
-    </div>
-  );
-}
+const SHARD_LABELS = ['Off', 'Flex', 'Def'];
 
 function RuneTree({ page, trees }) {
+  const index = useRuneIndex();
   if (!page) return <p className="dr-empty">No rune page yet.</p>;
   const selected = new Set((page.selectedPerkIds || []).map(Number));
   const shards = (page.selectedPerkIds || []).slice(6);
@@ -871,30 +1036,41 @@ function RuneTree({ page, trees }) {
   }
   const primary = trees.find((t) => t.id === page.primaryStyleId);
   const secondary = trees.find((t) => t.id === page.subStyleId);
+  const keystone = Number(page.selectedPerkIds?.[0]);
+  const keyName = index[keystone]?.name || '';
   return (
     <div className="dr-tree">
-      <TreeColumn tree={primary} selected={selected} />
+      <TreeColumn tree={primary} selected={selected} keyName={keyName} />
       <TreeColumn tree={secondary} selected={selected} skipKeystones />
       <div className="dr-shards">
+        <strong>Shards</strong>
         {shards.map((id, i) => (
-          <RuneIcon key={`shard-${i}-${id}`} id={id} size={22} />
+          <span key={`shard-${i}-${id}`} className="dr-shard">
+            <RuneIcon id={id} size={22} />
+            <em>{SHARD_LABELS[i] || 'Stat'}</em>
+          </span>
         ))}
       </div>
     </div>
   );
 }
 
-function TreeColumn({ tree, selected, skipKeystones }) {
+function TreeColumn({ tree, selected, skipKeystones, keyName }) {
   if (!tree) return <div className="dr-tree-col is-empty" />;
   const slots = skipKeystones ? (tree.slots || []).slice(1) : (tree.slots || []);
+  const icon = tree.icon ? `https://ddragon.leagueoflegends.com/cdn/img/${tree.icon}` : '';
   return (
-    <div className="dr-tree-col">
-      <strong>{tree.name}</strong>
+    <div className="dr-tree-col" data-tree={tree.id}>
+      <div className="dr-tree-head">
+        {icon ? <img src={icon} alt="" /> : null}
+        <strong>{tree.name}</strong>
+        {keyName ? <span>{keyName}</span> : null}
+      </div>
       {slots.map((slot, i) => (
         <div key={`${tree.id}-${i}`} className={`dr-tree-row${i === 0 && !skipKeystones ? ' is-key' : ''}`}>
           {(slot.runes || []).map((rune) => (
-            <span key={rune.id} className={selected.has(rune.id) ? 'is-on' : ''}>
-              <RuneIcon id={rune.id} size={i === 0 && !skipKeystones ? 34 : 24} />
+            <span key={rune.id} className={selected.has(rune.id) ? 'is-on' : ''} title={rune.name}>
+              <RuneIcon id={rune.id} size={i === 0 && !skipKeystones ? 36 : 22} />
             </span>
           ))}
         </div>

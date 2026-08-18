@@ -3,8 +3,9 @@ import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { playerSearchPath, parsePlayerSearch, parseRiotId, playerQuery } from '../lib/playerRoute';
 import { readRecentPlayers, rememberPlayer } from '../lib/recentPlayers';
 import { useSession } from '../state/SessionContext';
+import { useI18n } from '../i18n/LocaleContext';
 import FeedbackForm from './FeedbackForm';
-import LOGO from '../assets/logo.png';
+import LOGO from '../assets/logo-mark.png';
 import './TitleBar.css';
 
 const FALLBACK_VERSION = '0.1.0';
@@ -51,6 +52,7 @@ function IconGear() {
 
 export default function TitleBar() {
   const { session } = useSession();
+  const { t, locale, setLocale, locales } = useI18n();
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams] = useSearchParams();
@@ -64,7 +66,7 @@ export default function TitleBar() {
   const [appVersion, setAppVersion] = useState(FALLBACK_VERSION);
 
   useEffect(() => {
-    window.gdUpdate?.info?.().then((info) => {
+    window.riftUpdate?.info?.().then((info) => {
       if (info?.version) setAppVersion(info.version);
     }).catch(() => {});
   }, []);
@@ -94,7 +96,7 @@ export default function TitleBar() {
     const next = query.trim();
     if (!next) return;
     if (!next.includes('#')) {
-      setSearchHint('Use Name#TAG — for example Ana de Armas#7589.');
+      setSearchHint(t('chrome.searchHint'));
       setSearchOpen(true);
       return;
     }
@@ -102,31 +104,31 @@ export default function TitleBar() {
   };
 
   return (
-    <header className="gd-titlebar">
-      <div className="gd-titlebar__left" onDoubleClick={(e) => e.stopPropagation()}>
-        <div className="gd-titlebar__brand">
-          <img className="gd-titlebar__logo" src={LOGO} alt="GD Esports" />
-          <div className="gd-titlebar__names">
-            <span className="gd-titlebar__name">GD</span>
-            <span className="gd-titlebar__ver">APP V.{appVersion}</span>
+    <header className="rift-titlebar">
+      <div className="rift-titlebar__left" onDoubleClick={(e) => e.stopPropagation()}>
+        <div className="rift-titlebar__brand">
+          <img className="rift-titlebar__logo" src={LOGO} alt="Rift.lol" />
+          <div className="rift-titlebar__names">
+            <span className="rift-titlebar__name">RIFT<span className="rift-titlebar__lol">.LOL</span></span>
+            <span className="rift-titlebar__ver">APP V.{appVersion}</span>
           </div>
         </div>
-        <div className="gd-titlebar__nav">
-          <button type="button" className="gd-titlebar__icon-btn" onClick={() => window.history.back()} aria-label="Back">
+        <div className="rift-titlebar__nav">
+          <button type="button" className="rift-titlebar__icon-btn" onClick={() => window.history.back()} aria-label={t('chrome.back')}>
             <IconBack />
           </button>
-          <button type="button" className="gd-titlebar__icon-btn" onClick={() => window.history.forward()} aria-label="Forward">
+          <button type="button" className="rift-titlebar__icon-btn" onClick={() => window.history.forward()} aria-label={t('chrome.forward')}>
             <IconFwd />
           </button>
-          <button type="button" className="gd-titlebar__icon-btn" onClick={() => window.location.reload()} aria-label="Refresh">
+          <button type="button" className="rift-titlebar__icon-btn" onClick={() => window.location.reload()} aria-label={t('chrome.refresh')}>
             <IconRefresh />
           </button>
         </div>
       </div>
 
-      <div className="gd-titlebar__search-wrap" onDoubleClick={(e) => e.stopPropagation()}>
-        <form className="gd-titlebar__search" onSubmit={submitSearch}>
-          <svg className="gd-titlebar__search-icon" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+      <div className="rift-titlebar__search-wrap" onDoubleClick={(e) => e.stopPropagation()}>
+        <form className="rift-titlebar__search" onSubmit={submitSearch}>
+          <svg className="rift-titlebar__search-icon" viewBox="0 0 20 20" fill="none" aria-hidden="true">
             <circle cx="8.5" cy="8.5" r="5.5" stroke="currentColor" strokeWidth="1.5"/>
             <path d="M13 13l3.5 3.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
           </svg>
@@ -135,14 +137,14 @@ export default function TitleBar() {
             onChange={(e) => { setQuery(e.target.value); setSearchHint(''); }}
             onFocus={() => { setRecent(readRecentPlayers()); setSearchOpen(true); }}
             onBlur={() => setTimeout(() => setSearchOpen(false), 180)}
-            placeholder="Search Name#TAG"
+            placeholder={t('chrome.searchPlaceholder')}
             spellCheck={false}
           />
         </form>
         {searchOpen && (searchHint || recent.length > 0) && (
-          <div className="gd-titlebar__recent">
-            {searchHint && <div className="gd-titlebar__search-hint">{searchHint}</div>}
-            {recent.length > 0 && <div className="gd-titlebar__recent-label">Recent</div>}
+          <div className="rift-titlebar__recent">
+            {searchHint && <div className="rift-titlebar__search-hint">{searchHint}</div>}
+            {recent.length > 0 && <div className="rift-titlebar__recent-label">{t('chrome.recent')}</div>}
             {recent.map((id) => (
               <button
                 key={id}
@@ -157,28 +159,40 @@ export default function TitleBar() {
         )}
       </div>
 
-      <div className="gd-titlebar__right" onDoubleClick={(e) => e.stopPropagation()}>
-        <button type="button" className="gd-titlebar__feedback" onClick={() => setFeedbackOpen(true)}>
+      <div className="rift-titlebar__right" onDoubleClick={(e) => e.stopPropagation()}>
+        <button type="button" className="rift-titlebar__feedback" onClick={() => setFeedbackOpen(true)}>
           <IconBug />
-          Report feedback / bugs
+          {t('chrome.feedback')}
         </button>
-        <button type="button" className="gd-titlebar__icon-btn" onClick={() => navigate('/link-account')} aria-label="Settings">
+        <label className="rift-titlebar__lang">
+          <span className="rift-titlebar__lang-label">{t('lang.label')}</span>
+          <select
+            value={locale}
+            onChange={(e) => setLocale(e.target.value)}
+            aria-label={t('lang.label')}
+          >
+            {locales.map((item) => (
+              <option key={item.id} value={item.id}>{item.native}</option>
+            ))}
+          </select>
+        </label>
+        <button type="button" className="rift-titlebar__icon-btn" onClick={() => navigate('/link-account')} aria-label={t('chrome.settings')}>
           <IconGear />
         </button>
         <button
           type="button"
-          className="gd-titlebar__profile"
+          className="rift-titlebar__profile"
           onClick={() => navigate(session ? '/' : '/link-account')}
         >
-          {session ? `${session.gameName}#${session.tagLine}` : 'Link account'}
+          {session ? `${session.gameName}#${session.tagLine}` : t('chrome.linkAccount')}
         </button>
 
         {hasWindowApi && (
-          <div className="gd-titlebar__win">
-            <button type="button" className="gd-win-btn" onClick={() => window.windowControls.minimize()} aria-label="Minimize">
+          <div className="rift-titlebar__win">
+            <button type="button" className="rift-win-btn" onClick={() => window.windowControls.minimize()} aria-label={t('chrome.minimize')}>
               <svg viewBox="0 0 12 12"><path d="M2 6h8" stroke="currentColor" strokeWidth="1.2"/></svg>
             </button>
-            <button type="button" className="gd-win-btn gd-win-btn--close" onClick={() => window.windowControls.close()} aria-label="Minimize to tray" title="Minimize to tray">
+            <button type="button" className="rift-win-btn rift-win-btn--close" onClick={() => window.windowControls.close()} aria-label={t('chrome.closeTray')} title={t('chrome.closeTray')}>
               <svg viewBox="0 0 12 12"><path d="M3 3l6 6M9 3 3 9" stroke="currentColor" strokeWidth="1.2"/></svg>
             </button>
           </div>

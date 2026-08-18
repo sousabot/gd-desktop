@@ -18,6 +18,7 @@ contextBridge.exposeInMainWorld('riotAPI', {
   getSummonersByPuuidsBulk: (args) => ipcRenderer.invoke('riot:getSummonersByPuuidsBulk', args),
   getChampionMasteryBulk: (args) => ipcRenderer.invoke('riot:getChampionMasteryBulk', args),
   getChampionMasteries: (args) => ipcRenderer.invoke('riot:getChampionMasteries', args),
+  getSeasonPeak: (args) => ipcRenderer.invoke('peak:seasonHigh', args),
   getLastMatchIdsBulk: (args) => ipcRenderer.invoke('riot:getLastMatchIdsBulk', args),
   getTierList: (args) => ipcRenderer.invoke('riot:getTierList', args),
   onTierListProgress: (cb) => {
@@ -46,12 +47,12 @@ contextBridge.exposeInMainWorld('windowControls', {
   },
 });
 
-contextBridge.exposeInMainWorld('gdAPI', {
+contextBridge.exposeInMainWorld('riftAPI', {
   sendFeedback: (payload) => ipcRenderer.invoke('app:sendFeedback', payload),
   appInfo: () => ipcRenderer.invoke('app:info'),
 });
 
-contextBridge.exposeInMainWorld('gdUpdate', {
+contextBridge.exposeInMainWorld('riftUpdate', {
   info: () => ipcRenderer.invoke('app:info'),
   status: () => ipcRenderer.invoke('update:status'),
   check: () => ipcRenderer.invoke('update:check'),
@@ -70,6 +71,7 @@ contextBridge.exposeInMainWorld('lcuAPI', {
   getChampSelect: () => ipcRenderer.invoke('lcu:champSelect'),
   applyRunes: (page) => ipcRenderer.invoke('lcu:applyRunes', page),
   selectChamp: (payload) => ipcRenderer.invoke('lcu:selectChamp', payload),
+  getRankedInsight: () => ipcRenderer.invoke('lcu:rankedInsight'),
 });
 
 contextBridge.exposeInMainWorld('probuildsAPI', {

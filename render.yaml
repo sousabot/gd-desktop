@@ -11,5 +11,5 @@ services:
         sync: false
       - key: DISCORD_WEBHOOK_URL
         sync: false
-      - key: GD_APP_TOKEN
+      - key: RIFT_APP_TOKEN
         sync: false

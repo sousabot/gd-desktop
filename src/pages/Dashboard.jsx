@@ -7,8 +7,21 @@ import { rememberPlayer } from '../lib/recentPlayers';
 import { apiUserMessage, noticeFromError } from '../lib/apiNotice';
 import { MODE_KEYS, MODE_LABEL, MODE_QUEUE } from '../lib/queues';
 import { useSession } from '../state/SessionContext';
+import { useI18n } from '../i18n/LocaleContext';
 import MatchReview from '../components/MatchReview';
 import { GD_SCORE_HINT } from '../lib/gdScore';
+import { padTeamBans } from '../lib/bans';
+import {
+  displayPeakShort,
+  estimateRankMmr,
+  formatMmr,
+  mergePeakRank,
+  mmrToRank,
+  peakFromLcuPack,
+  rankSnapshot,
+  resolveEstimatedMmr,
+} from '../lib/rankMmr';
+import { loadOpggRankContext } from '../lib/seasonPeak';
 import './Dashboard.css';
 import CHALLENGER_IMG  from '../assets/ranks/CHALLENGER.webp';
 import GRANDMASTER_IMG from '../assets/ranks/GRANDMASTER_SMALL.webp';
@@ -38,7 +51,7 @@ const RANK_COLORS = {
   MASTER: '#a06bff', GRANDMASTER: '#ff5c68', CHALLENGER: '#ffd76b',
 };
 const rankColor = (label) =>
-  RANK_COLORS[(label || '').split(' ')[0].toUpperCase()] || '#a06bff';
+  RANK_COLORS[(label || '').split(' ')[0].toUpperCase()] || '#7c5cff';
 
 const RANK_IMGS = {
   CHALLENGER:  CHALLENGER_IMG,
@@ -50,6 +63,24 @@ const RANK_IMGS = {
 };
 const rankImg = (label) =>
   RANK_IMGS[(label || '').split(' ')[0].toUpperCase()] || null;
+
+function peakStoreKey(riotId, mode) {
+  return `rift-peak-rank:${String(riotId || '').toLowerCase()}:${mode}`;
+}
+
+function readStoredPeak(riotId, mode) {
+  try {
+    return JSON.parse(localStorage.getItem(peakStoreKey(riotId, mode)) || 'null');
+  } catch {
+    return null;
+  }
+}
+
+function writeStoredPeak(riotId, mode, peak) {
+  try {
+    localStorage.setItem(peakStoreKey(riotId, mode), JSON.stringify(peak));
+  } catch { /* ignore quota */ }
+}
 
 /* ─── Sparkline ────────────────────────────────────────────── */
 function Sparkline({ data = [], up = true }) {
@@ -150,7 +181,7 @@ function LPRing({ lp, win }) {
   const pct = Math.min(lp / 100, 1);
   const c = win ? '#3ecf8e' : '#ff5c68';
   return (
-    <div className="db-lp-ring" title={`GD Score ${lp}`}>
+    <div className="db-lp-ring" title={`Rift Score ${lp}`}>
       <svg width="28" height="28" viewBox="0 0 28 28">
         <circle cx="14" cy="14" r={r} fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="2.5" />
         <circle cx="14" cy="14" r={r} fill="none" stroke={c} strokeWidth="2.5"
@@ -164,6 +195,7 @@ function LPRing({ lp, win }) {
 
 /* ─── RecentGameRow ────────────────────────────────────────── */
 function RecentGameRow({ game, active, onSelect }) {
+  const { t } = useI18n();
   const { champion, win, kills, deaths, assists, kda, ago, gdScore, lp, queueLabel, queueType } = game;
   const score = gdScore ?? lp;
   return (
@@ -178,7 +210,7 @@ function RecentGameRow({ game, active, onSelect }) {
       </div>
       <div className="db-recent-mid">
         <div className="db-recent-top-row">
-          <span className={`db-recent-result ${win ? 'win' : 'loss'}`}>{win ? 'WIN' : 'LOSS'}</span>
+          <span className={`db-recent-result ${win ? 'win' : 'loss'}`}>{win ? t('dash.win') : t('dash.loss')}</span>
           <span className="db-recent-queue">{queueLabel || queueType || 'Solo/Duo'}</span>
         </div>
         <span className="db-recent-kda">{kills}/{deaths}/{assists}</span>
@@ -192,6 +224,7 @@ function RecentGameRow({ game, active, onSelect }) {
 /* ─── Dashboard ────────────────────────────────────────────── */
 export default function Dashboard() {
   const { session } = useSession();
+  const { t } = useI18n();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const ddVersion = useDdragonVersion();
@@ -210,6 +243,8 @@ export default function Dashboard() {
   const [matchIdx, setMatchIdx] = useState(0);
   const [reviewOpen, setReviewOpen] = useState(false);
   const [lcuCol, setLcuCol] = useState(null);
+  const [peakRank, setPeakRank] = useState(null);
+  const [estMmr, setEstMmr] = useState(null);
 
   const lookup = {
     region: session?.region || 'europe',
@@ -231,7 +266,7 @@ export default function Dashboard() {
     const parsed = parseRiotId(riotId, session?.tagLine || '');
     if (!parsed) {
       setProfile(null);
-      setLoadError('Use Name#TAG — for example Ana de Armas#7589.');
+      setLoadError(t('dash.needTag'));
       setLoading(false);
       return;
     }
@@ -250,7 +285,7 @@ export default function Dashboard() {
       console.error('[Dashboard] Failed to load summoner:', err);
       noticeFromError(err);
       setProfile(null);
-      setLoadError(apiUserMessage(err) || 'Could not load this account. Check the Riot ID (Name#TAG) and region.');
+      setLoadError(apiUserMessage(err) || t('dash.loadFail'));
     } finally {
       setLoading(false);
     }
@@ -307,6 +342,63 @@ export default function Dashboard() {
     return () => clearInterval(t);
   }, [liveGame]);
 
+  useEffect(() => {
+    if (!profile?.riotId) {
+      setPeakRank(null);
+      setEstMmr(null);
+      return undefined;
+    }
+    const current = rankSnapshot(profile.rankTier, profile.rankDivision, profile.lp);
+    const stored = readStoredPeak(profile.riotId, mode);
+    const visibleMmr = estimateRankMmr(profile.rankTier, profile.rankDivision, profile.lp);
+    let cancelled = false;
+    const applyPeak = (pack, seasonHigh) => {
+      if (cancelled) return;
+      const queueType = mode === 'Flex' ? 'RANKED_FLEX_SR' : 'RANKED_SOLO_5x5';
+      const tracked = seasonHigh
+        ? rankSnapshot(seasonHigh.tier, seasonHigh.division, seasonHigh.lp)
+        : null;
+      const peak = mergePeakRank(stored, current, tracked, ...peakFromLcuPack(pack, queueType));
+      if (peak) writeStoredPeak(profile.riotId, mode, peak);
+      setPeakRank(peak);
+    };
+    const applyMmr = (lobbyMmrs) => {
+      if (cancelled) return;
+      setEstMmr(resolveEstimatedMmr({
+        visibleMmr,
+        wins: profile.wins,
+        losses: profile.losses,
+        lobbyMmrs,
+      }));
+    };
+    applyPeak(null, profile.seasonPeak || null);
+    setEstMmr(profile.estMmr ?? resolveEstimatedMmr({
+      visibleMmr,
+      wins: profile.wins,
+      losses: profile.losses,
+      lobbyMmrs: [],
+    }));
+    const lcuJob = (!viewingOther && window.lcuAPI?.getRankedInsight)
+      ? window.lcuAPI.getRankedInsight().then((insight) => {
+        const same = insight?.riotId
+          && String(insight.riotId).toLowerCase() === String(profile.riotId).toLowerCase();
+        const pack = mode === 'Flex' ? insight?.flex : insight?.solo;
+        return same ? pack : null;
+      }).catch(() => null)
+      : Promise.resolve(null);
+    const trackerJob = loadOpggRankContext({
+      puuid: profile.puuid,
+      platform: profile.platform,
+      flex: mode === 'Flex',
+      riotId: profile.riotId,
+    }).catch(() => ({ peak: profile.seasonPeak || null, lobbyMmrs: [] }));
+    Promise.all([lcuJob, trackerJob]).then(([pack, ctx]) => {
+      applyPeak(pack, ctx?.peak || profile.seasonPeak || null);
+      if (ctx?.lobbyMmrs?.length) applyMmr(ctx.lobbyMmrs);
+    });
+    return () => { cancelled = true; };
+  }, [profile?.riotId, profile?.puuid, profile?.platform, profile?.seasonPeak, profile?.rankTier, profile?.rankDivision, profile?.lp, profile?.wins, profile?.losses, profile?.estMmr, mode, viewingOther]);
+
   const winrate = profile && profile.wins != null
     ? Math.round((profile.wins / Math.max(1, profile.wins + profile.losses)) * 100)
     : null;
@@ -316,6 +408,8 @@ export default function Dashboard() {
   const games = profile?.recentGames || [];
   const lg = games[matchIdx] || profile?.lastGame || null;
   const rc = profile ? rankColor(profile.rank) : '#a06bff';
+  const mmrRank = mmrToRank(estMmr ?? profile?.estMmr);
+  const mmrColor = mmrRank?.tier ? (RANK_COLORS[mmrRank.tier] || '#9b86ff') : '#9b86ff';
   const resolvedPlatform = profile?.platform || lookup.platform;
   const collections = profile?.collections || { played: 0, total: 0 };
   const lens = profile?.lens || { score: 0, series: [50], avgDeaths: 0 };
@@ -330,6 +424,21 @@ export default function Dashboard() {
   const liveEnemy = liveYou?.teamId === 200 ? liveGame.blue : liveGame?.red;
   const liveBlue = inLive ? (liveAlly || []).map((p) => p.champion) : null;
   const liveRed = inLive ? (liveEnemy || []).map((p) => p.champion) : null;
+  const liveAllyTeam = liveYou?.teamId === 200 ? 200 : 100;
+  const padList = (list = []) => {
+    const rows = list.slice(0, 5);
+    while (rows.length < 5) rows.push({ champion: null });
+    return rows;
+  };
+  const allyBans = inLive
+    ? padTeamBans(liveGame.bans || [], liveAllyTeam)
+    : padList(lg?.allyBans);
+  const enemyBans = inLive
+    ? padTeamBans(liveGame.bans || [], liveAllyTeam === 200 ? 100 : 200)
+    : padList(lg?.enemyBans);
+  const showBans = inLive
+    ? (liveGame.bans || []).length > 0
+    : ((lg?.allyBans || []).length + (lg?.enemyBans || []).length) > 0;
   const liveElapsed = inLive
     ? (liveGame.gameLength || 0) + Math.floor((now - liveAt) / 1000)
     : 0;
@@ -356,14 +465,14 @@ export default function Dashboard() {
   })();
 
   const stats = [
-    { label: 'KDA', value: s.kda, delta: s.kdaDelta, deltaDir: s.kdaDeltaDir, sparkData: sp.kda },
-    { label: 'GD Score', value: s.gdScore, delta: s.gdDelta, deltaDir: s.gdDeltaDir, sparkData: sp.gdScore, hint: GD_SCORE_HINT },
-    { label: 'KP', value: s.kp, delta: s.kpDelta, deltaDir: s.kpDeltaDir, sparkData: sp.kp },
-    { label: 'CSM', value: s.csm, delta: s.csmDelta, deltaDir: s.csmDeltaDir, sparkData: sp.csm },
-    { label: 'Vision Score', value: s.visionScore, delta: s.visionDelta, deltaDir: s.visionDeltaDir, sparkData: sp.vision },
-    { label: 'GPM', value: s.gpm, delta: s.gpmDelta, deltaDir: s.gpmDeltaDir, sparkData: sp.gpm },
-    { label: 'Gold Diff @15', value: s.goldDiff15, delta: s.goldDiff15Delta, deltaDir: s.goldDiff15DeltaDir, sparkData: sp.goldDiff15 },
-    { label: 'K+A Diff @15', value: s.kaDiff15, delta: s.kaDiff15Delta, deltaDir: s.kaDiff15DeltaDir, sparkData: sp.kaDiff15 },
+    { label: t('dash.kda'), value: s.kda, delta: s.kdaDelta, deltaDir: s.kdaDeltaDir, sparkData: sp.kda },
+    { label: t('dash.riftScore'), value: s.gdScore, delta: s.gdDelta, deltaDir: s.gdDeltaDir, sparkData: sp.gdScore, hint: GD_SCORE_HINT },
+    { label: t('dash.kp'), value: s.kp, delta: s.kpDelta, deltaDir: s.kpDeltaDir, sparkData: sp.kp },
+    { label: t('dash.csm'), value: s.csm, delta: s.csmDelta, deltaDir: s.csmDeltaDir, sparkData: sp.csm },
+    { label: t('dash.vision'), value: s.visionScore, delta: s.visionDelta, deltaDir: s.visionDeltaDir, sparkData: sp.vision },
+    { label: t('dash.gpm'), value: s.gpm, delta: s.gpmDelta, deltaDir: s.gpmDeltaDir, sparkData: sp.gpm },
+    { label: t('dash.gold15'), value: s.goldDiff15, delta: s.goldDiff15Delta, deltaDir: s.goldDiff15DeltaDir, sparkData: sp.goldDiff15 },
+    { label: t('dash.ka15'), value: s.kaDiff15, delta: s.kaDiff15Delta, deltaDir: s.kaDiff15DeltaDir, sparkData: sp.kaDiff15 },
   ];
 
   return (
@@ -449,13 +558,13 @@ export default function Dashboard() {
                     </div>
 
                     <div className="db-rank-card" style={{ '--rc': rc }}>
-                      <span className="db-rank-card-eyebrow">{MODE_LABEL[mode] === 'All Queues' ? 'Ranked' : MODE_LABEL[mode]}</span>
+                      <span className="db-rank-card-eyebrow">{MODE_LABEL[mode] === 'All Queues' ? t('dash.ranked') : MODE_LABEL[mode]}</span>
                       <div className="db-rank-card-main">
                         {rankImg(profile.rank) && (
                           <img src={rankImg(profile.rank)} alt={profile.rank} className="db-rank-card-emblem" />
                         )}
                         <div className="db-rank-card-info">
-                          <span className="db-rank-card-name" style={{ color: rc }}>{profile.rank || 'Unranked'}</span>
+                          <span className="db-rank-card-name" style={{ color: rc }}>{profile.rank || t('dash.unranked')}</span>
                           {profile.ladderRank && (
                             <span className="db-rank-card-num" style={{ color: rc }}>#{profile.ladderRank}</span>
                           )}
@@ -464,10 +573,42 @@ export default function Dashboard() {
                           </span>
                         </div>
                       </div>
+                      {(peakRank || mmrRank) && (
+                        <div className="db-rank-split">
+                          <div className="db-rank-split-col">
+                            <span className="db-rank-split-label">{t('dash.peak')}</span>
+                            {rankImg(peakRank?.tier || profile.rank) && (
+                              <img src={rankImg(peakRank?.tier || profile.rank)} alt="" className="db-rank-split-emblem" />
+                            )}
+                            <span className="db-rank-split-val" style={{ color: rc }}>
+                              {displayPeakShort(
+                                peakRank,
+                                rankSnapshot(profile.rankTier, profile.rankDivision, profile.lp),
+                              ) || '—'}
+                            </span>
+                            <span className="db-rank-split-q" title={t('dash.peakHint')}>?</span>
+                          </div>
+                          <div className="db-rank-split-col is-mmr">
+                            <span className="db-rank-split-label">{t('dash.mmr')}</span>
+                            {rankImg(mmrRank?.tier) && (
+                              <img src={rankImg(mmrRank.tier)} alt="" className="db-rank-split-emblem" />
+                            )}
+                            <span className="db-rank-split-val" style={{ color: mmrColor }}>
+                              {mmrRank?.short || '—'}
+                            </span>
+                            <span
+                              className="db-rank-split-q"
+                              title={`${t('dash.estMmrHint')}${formatMmr(estMmr ?? profile.estMmr) ? ` (${formatMmr(estMmr ?? profile.estMmr)})` : ''}`}
+                            >
+                              ?
+                            </span>
+                          </div>
+                        </div>
+                      )}
                       <div className="db-rank-card-record">
                         {profile.wins != null
                           ? `${profile.wins}W – ${profile.losses}L${winrate != null ? ` · ${winrate}%` : ''}`
-                          : 'Ranked data unavailable'}
+                          : t('dash.rankFail')}
                       </div>
                     </div>
                   </div>
@@ -502,6 +643,15 @@ export default function Dashboard() {
                   </div>
 
                   <div className="db-card-match-teams">
+                    {showBans ? (
+                      <div className="db-ban-row">
+                        {allyBans.map((b, i) => (
+                          <span key={`ab-${b.champion || i}`} className={`db-ban${b.champion ? '' : ' is-empty'}`}>
+                            {b.champion ? <ChampionIcon name={b.champion} size={18} /> : null}
+                          </span>
+                        ))}
+                      </div>
+                    ) : null}
                     <div className="db-card-match-row">
                       {Array.from({ length: 5 }).map((_, i) => {
                         const c = (liveBlue || lg?.allyTeam)?.[i];
@@ -519,6 +669,15 @@ export default function Dashboard() {
                           : <span key={`e-empty-${i}`} className="db-champ-empty" />;
                       })}
                     </div>
+                    {showBans ? (
+                      <div className="db-ban-row">
+                        {enemyBans.map((b, i) => (
+                          <span key={`eb-${b.champion || i}`} className={`db-ban${b.champion ? '' : ' is-empty'}`}>
+                            {b.champion ? <ChampionIcon name={b.champion} size={18} team="red" /> : null}
+                          </span>
+                        ))}
+                      </div>
+                    ) : null}
                   </div>
 
                   <div className="db-card-match-dots">
@@ -538,17 +697,11 @@ export default function Dashboard() {
                     className={`db-pill-btn db-pill-btn--live${inLive ? ' is-live' : ''}`}
                     onClick={() => navigate(`/live${playerQuery(activeId)}`)}
                   >
-                    {inLive ? 'Watch live' : 'Live status'}
+                    {inLive ? t('dash.watchLive') : t('dash.liveStatus')}
                   </button>
                 </article>
 
-                <article
-                  className="db-dpm-card db-card-soon"
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => navigate('/replays')}
-                  onKeyDown={(e) => { if (e.key === 'Enter') navigate('/replays'); }}
-                >
+                <article className="db-dpm-card db-card-soon">
                   {lg && splashChamp && (
                     <img
                       src={loadingImg(splashChamp)}
@@ -559,9 +712,9 @@ export default function Dashboard() {
                   )}
                   <div className="db-card-soon-overlay" />
                   <div className="db-card-soon-body">
-                    <span className="db-card-soon-kicker">Replays</span>
-                    <h3>Record this client</h3>
-                    <p>Borderless or windowed. Exclusive fullscreen cannot be captured.</p>
+                    <span className="db-card-soon-kicker">Replays · Soon</span>
+                    <h3>Paused for now</h3>
+                    <p>Capture fights Discord screenshare. Back when that’s fixed.</p>
                   </div>
                 </article>
 
@@ -634,7 +787,7 @@ export default function Dashboard() {
                 <article className="db-dpm-card db-card-lens">
                   <div className="db-lens-head">
                     <span className="db-lens-mark">◎</span>
-                    <span>GD Lens</span>
+                    <span>Rift Lens</span>
                   </div>
                   <svg viewBox="0 0 200 70" className="db-lens-graph" preserveAspectRatio="none">
                     <defs>

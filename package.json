@@ -1,12 +1,12 @@
 {
-  "name": "gd-desktop",
-  "version": "0.1.2",
-  "description": "GD Esports desktop app — League stats dashboard",
+  "name": "rift-desktop",
+  "version": "0.1.9",
+  "description": "Rift.lol desktop app — League stats dashboard",
   "author": {
-    "name": "GD Esports"
+    "name": "Rift.lol"
   },
-  "productName": "GD Esports",
-  "repository": "https://github.com/sousabot/gd-desktop",
+  "productName": "Rift.lol",
+  "repository": "https://github.com/sousabot/rift-desktop",
   "main": "electron/main.js",
   "private": true,
   "overwolf": {
@@ -45,8 +45,8 @@
     "wait-on": "^7.2.0"
   },
   "build": {
-    "appId": "com.gdesports.desktop",
-    "productName": "GD Esports",
+    "appId": "com.riftlol.desktop",
+    "productName": "Rift.lol",
     "directories": {
       "output": "release"
     },
@@ -66,13 +66,13 @@
       },
       {
         "from": "client.env",
-        "to": "gd.env"
+        "to": "rift.env"
       }
     ],
     "extraFiles": [
       {
         "from": "client.env",
-        "to": "gd.env"
+        "to": "rift.env"
       }
     ],
     "forceCodeSigning": false,
@@ -100,7 +100,7 @@
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
-      "shortcutName": "GD Esports",
+      "shortcutName": "Rift.lol",
       "artifactName": "${productName}-Setup-${version}.${ext}"
     },
     "portable": {
@@ -109,7 +109,7 @@
     "publish": {
       "provider": "github",
       "owner": "sousabot",
-      "repo": "gd-desktop",
+      "repo": "rift-desktop",
       "releaseType": "release"
     }
   }

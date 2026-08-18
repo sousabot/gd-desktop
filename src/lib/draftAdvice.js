@@ -313,7 +313,7 @@ function finishPage(champKey, role, spec) {
     label,
     why: spec.why || '',
     recommended: !!spec.recommended,
-    name: `GD ${String(champKey || 'Draft').slice(0, 12 - label.length)} ${label}`.slice(0, 20),
+    name: `Rift ${String(champKey || 'Draft').slice(0, 12 - label.length)} ${label}`.slice(0, 20),
     primaryStyleId: spec.primaryStyleId,
     subStyleId: spec.subStyleId,
     selectedPerkIds: ids.slice(0, 9),
@@ -495,6 +495,7 @@ export function adviseDraft({
   pickable = [],
   catalog = [],
   pool = null,
+  offMeta = false,
 } = {}) {
   const blocked = new Set([...bans, ...taken].map(Number).filter((id) => id > 0));
   const ownedSet = new Set((owned || []).map(Number));
@@ -506,7 +507,14 @@ export function adviseDraft({
   const classic = enemyLaneName ? countersFor(enemyLaneName, role) : [];
 
   const scored = catalog
-    .filter((c) => c?.id > 0 && !blocked.has(c.id) && playsRole(c.key, role))
+    .filter((c) => {
+      if (!(c?.id > 0) || blocked.has(c.id)) return false;
+      if (playsRole(c.key, role)) return true;
+      if (!offMeta) return false;
+      const mas = pool?.mastery?.[c.id];
+      const rec = pool?.recent?.[c.id];
+      return (mas?.level || 0) >= 3 || (rec?.games || 0) >= 1;
+    })
     .map((c) => {
       const lane = TYPICAL_LANE[c.key] || TYPICAL_LANE[c.name] || null;
       let score = 0;
@@ -553,7 +561,7 @@ export function adviseDraft({
     })
     .sort((a, b) => b.score - a.score);
 
-  const picks = scored.filter((c) => c.score > 0).slice(0, 8);
+  const picks = scored.filter((c) => c.score > 0).slice(0, 10);
   const locked = youChamp?.key || youChamp?.name || null;
   const runes = locked ? runesFor(locked, role, enemyTags) : (picks[0] ? runesFor(picks[0].key, role, enemyTags) : runesFor(null, role, enemyTags));
 
@@ -565,7 +573,7 @@ export function adviseDraft({
     classic,
     picks,
     runes,
-    disclaimer: 'GD Draft advice from matchup notes, your pool, and duo tags — not an official Riot winrate.',
+    disclaimer: 'Rift Draft advice from matchup notes, your pool, and duo tags — not an official Riot winrate.',
   };
 }
 
