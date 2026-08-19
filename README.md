@@ -37,7 +37,7 @@ RIFT_APP_TOKEN=the-same-token-as-render
 
 The hosted proxy refuses Riot and feedback calls without that token. Local `npm run server` with an empty token only accepts localhost.
 
-3. `npm run dist` and send **`release\Rift.lol-Setup-0.1.11.exe`** (the installer). Portable still works, but it cannot auto-update. Local `npm run dev` still uses `.env` (set `RIFT_USE_LOCAL_KEY=1` to skip the proxy).
+3. `npm run dist` and send **`release\Rift.lol-Setup-0.1.12.exe`** (the installer). Portable still works, but it cannot auto-update. Local `npm run dev` still uses `.env` (set `RIFT_USE_LOCAL_KEY=1` to skip the proxy).
 
 Windows SmartScreen / Defender will warn (the exe is unsigned). Tell testers: **More info → Run anyway**. If Defender quarantined the file: **Windows Security → Virus & threat protection → Protection history → Allow**. Do not send an older exe that bundled a key.
 
@@ -101,10 +101,10 @@ That builds Setup + portable and publishes a GitHub Release with
 `latest.yml` (required). The installed app reads that file and updates.
 
 If you already ran `npm run dist`, you can upload these files to a
-Release tagged `v0.1.11` instead:
+Release tagged `v0.1.12` instead:
 
-- `Rift.lol-Setup-0.1.11.exe`
-- `Rift.lol-Setup-0.1.11.exe.blockmap`
+- `Rift.lol-Setup-0.1.12.exe`
+- `Rift.lol-Setup-0.1.12.exe.blockmap`
 - `latest.yml`
 
 Keep the Setup artifact name exactly like that. Do not upload only the

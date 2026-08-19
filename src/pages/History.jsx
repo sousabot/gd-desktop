@@ -6,15 +6,16 @@ import RoleIcon from '../components/RoleIcon';
 import MatchReview from '../components/MatchReview';
 import { parsePlayerSearch, parseRiotId } from '../lib/playerRoute';
 import { apiUserMessage, noticeFromError } from '../lib/apiNotice';
+import { isPlausibleLpDelta } from '../lib/lpHistory';
 import { MODE_KEYS, MODE_LABEL, MODE_QUEUE } from '../lib/queues';
 import { useSession } from '../state/SessionContext';
 import { useI18n } from '../i18n/LocaleContext';
 import './History.css';
 
 function lpChangeLabel(game) {
-  const measured = Number.isFinite(Number(game.lpDelta)) && Number(game.lpDelta) !== 0;
+  const measured = isPlausibleLpDelta(game.lpDelta);
   const n = measured ? Number(game.lpDelta) : Number(game.lpDeltaEst);
-  if (!Number.isFinite(n) || n === 0) return '—';
+  if (!isPlausibleLpDelta(n)) return '—';
   return `${measured ? '' : '~'}${n > 0 ? '+' : ''}${Math.round(n)}`;
 }
 

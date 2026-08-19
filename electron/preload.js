@@ -79,6 +79,10 @@ contextBridge.exposeInMainWorld('probuildsAPI', {
   list: (args) => ipcRenderer.invoke('probuilds:list', args),
 });
 
+contextBridge.exposeInMainWorld('metaBuildsAPI', {
+  get: (args) => ipcRenderer.invoke('meta:builds', args),
+});
+
 contextBridge.exposeInMainWorld('spectateAPI', {
   list: (args) => ipcRenderer.invoke('spectate:list', args),
   launch: (args) => ipcRenderer.invoke('spectate:launch', args),

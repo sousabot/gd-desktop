@@ -75,7 +75,11 @@ function collectLp(json, into) {
   for (const row of rows) {
     const id = row?.matchId != null ? String(row.matchId) : '';
     const delta = Number(row?.lpInfo?.lp);
-    if (!id || !Number.isFinite(delta) || delta === 0) continue;
+    // U.GG leaves a huge sentinel (often ~-9992) when it has no LP for
+    // that match — same number on wins and losses. Ranked deltas stay
+    // in tens of LP.
+    if (!id || !Number.isFinite(delta) || delta === 0 || Math.abs(delta) > 80) continue;
+    if (row?.lpInfo?.placement) continue;
     into[id] = Math.round(delta);
     n += 1;
   }

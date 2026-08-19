@@ -140,7 +140,7 @@ function rarityLabel(raw) {
   if (key.includes('transcendent')) return 'Transcendent';
   if (key.includes('exalted')) return 'Exalted';
   if (key.includes('rare')) return 'Rare';
-  return 'Common';
+  return 'Regular';
 }
 
 function itemRp(item) {
@@ -256,6 +256,22 @@ async function loadRpCatalog(creds) {
   return new Map();
 }
 
+async function loadOwnedSkinDates(creds) {
+  try {
+    const items = await lcuGet(creds, '/lol-inventory/v1/inventory?inventoryTypes=CHAMPION_SKIN');
+    const map = new Map();
+    for (const it of Array.isArray(items) ? items : []) {
+      const id = Number(it.itemId ?? it.itemID ?? it.id);
+      const raw = it.purchaseDate ?? it.purchase_date ?? it.acquiredDate;
+      const at = typeof raw === 'number' ? raw : Date.parse(raw);
+      if (Number.isFinite(id) && Number.isFinite(at) && at > 0) map.set(id, at);
+    }
+    return map;
+  } catch {
+    return new Map();
+  }
+}
+
 function emptySnapshot(extra = {}) {
   return {
     connected: false,
@@ -302,7 +318,7 @@ async function fetchCollections() {
     rawChamps = await mergeInventorySkins(creds, rawChamps);
   }
 
-  const prices = await loadRpCatalog(creds);
+  const [prices, dates] = await Promise.all([loadRpCatalog(creds), loadOwnedSkinDates(creds)]);
   const championsMap = (Array.isArray(rawChamps) ? rawChamps : [])
     .filter((c) => c && !c.alias?.startsWith?.('TFT') && Number(c.id) > 0)
     .map((champ) => {
@@ -319,6 +335,8 @@ async function fetchCollections() {
             isBase: false,
             isChroma: false,
             rarity: rarityLabel(skin.rarity),
+            isLegacy: !!skin.isLegacy,
+            purchasedAt: dates.get(id) || 0,
             rp: prices.get(id) || 0,
             tile: tileUrl(champ, skin),
             splash: splashUrl(champ, skin),
@@ -690,7 +708,7 @@ async function applyRunePage(page) {
   }
 
   const payload = {
-    name: String(page?.name || 'GD Draft').slice(0, 20),
+    name: String(page?.name || 'Rift Draft').slice(0, 20),
     primaryStyleId: Number(page.primaryStyleId),
     subStyleId: Number(page.subStyleId),
     selectedPerkIds: selectedPerkIds.slice(0, 9),
@@ -701,7 +719,7 @@ async function applyRunePage(page) {
     const pages = await lcuGet(creds, '/lol-perks/v1/pages');
     const list = Array.isArray(pages) ? pages : [];
     const editable = list.filter((p) => p && p.isEditable !== false && Number(p.id) > 0);
-    const target = editable.find((p) => String(p.name || '').startsWith('GD '))
+    const target = editable.find((p) => /^Rift |^GD /i.test(String(p.name || '')))
       || editable.find((p) => p.current)
       || editable[editable.length - 1]
       || null;

@@ -16,11 +16,12 @@ import {
 } from '../lib/draftAdvice';
 import { typicalLane } from '../lib/champLane';
 import { refreshRunePages } from '../lib/runePages';
-import { getDdragonVersion, useRuneTrees, useRuneIndex, champSpellImgUrl, champPassiveImgUrl, champLoadingUrl, useItemNameIndex, useItemCatalog } from '../services/ddragon';
+import { getDdragonVersion, useRuneTrees, useRuneIndex, champLoadingUrl, useItemNameIndex, useItemCatalog } from '../services/ddragon';
 import { getDraftPool } from '../services/riotApi';
 import { coreItemNames, buildItemNames, resolveItemId, keystoneId, timeAgo, treeId, itemsForKeystone, fetchProbuilds } from '../lib/probuilds';
 import { useSession } from '../state/SessionContext';
 import { useI18n } from '../i18n/LocaleContext';
+import DraftBuildCard, { SkillPriority, useMetaBuilds } from './DraftBuildCard';
 import './Draft.css';
 
 const ROLES = ['Top', 'Jungle', 'Mid', 'ADC', 'Support'];
@@ -317,31 +318,31 @@ export default function Draft() {
   }, [runeFocus]);
 
   useEffect(() => {
-    if (!lockedIn || !youChamp?.key) {
+    if (!runeFocus) {
       setKit(null);
       return undefined;
     }
     let alive = true;
     getDdragonVersion()
-      .then((v) => fetch(`https://ddragon.leagueoflegends.com/cdn/${v}/data/en_US/champion/${youChamp.key}.json`))
+      .then((v) => fetch(`https://ddragon.leagueoflegends.com/cdn/${v}/data/en_US/champion/${runeFocus}.json`))
       .then((r) => r.json())
       .then((data) => {
         if (!alive) return;
-        const c = data.data?.[youChamp.key];
+        const c = data.data?.[runeFocus];
         setKit(c ? { version: data.version, passive: c.passive, spells: c.spells || [] } : null);
       })
       .catch(() => { if (alive) setKit(null); });
     return () => { alive = false; };
-  }, [lockedIn, youChamp?.key]);
+  }, [runeFocus]);
 
-  const sendRunes = async () => {
-    if (!window.lcuAPI?.applyRunes || !runes) return;
+  const sendRunes = async (page = runes) => {
+    if (!window.lcuAPI?.applyRunes || !page) return;
     setSending(true);
     setRuneMsg('');
     try {
-      const result = await window.lcuAPI.applyRunes(runes);
+      const result = await window.lcuAPI.applyRunes(page);
       if (result.ok) {
-        setImported({ runes: true, spells: !!result.spells, pageId: runes.id });
+        setImported({ runes: true, spells: !!result.spells, pageId: page.id || page.name || 'meta' });
         setRuneMsg(result.spells
           ? 'Runes and summoners sent to League.'
           : 'Rune page sent to League.');
@@ -713,7 +714,9 @@ function Loadout({
   disclaimer,
   proChamp,
 }) {
-  const { rows, status } = useProbuilds(proChamp, activeRole);
+  const { rows } = useProbuilds(proChamp, activeRole);
+  const meta = useMetaBuilds(pickChamp?.key, activeRole, runes?.spells);
+  const skillBuild = (meta.builds || []).find((b) => b.id === 'most') || meta.builds?.[0];
   const itemsByName = useItemNameIndex();
   const itemCatalog = useItemCatalog();
   const selectedBuild = itemsForKeystone(rows, runes?.selectedPerkIds?.[0]);
@@ -749,6 +752,13 @@ function Loadout({
           ))}
         </div>
       </div>
+
+      <DraftBuildCard
+        champion={pickChamp?.key}
+        role={activeRole}
+        spells={runes?.spells}
+        kit={kit}
+      />
 
       <div className="dr-your-grid">
         <aside className="dr-your-side">
@@ -808,79 +818,61 @@ function Loadout({
               {(runes?.spells || []).map((id) => (
                 <SpellIcon key={`sum-${id}`} id={id} size={40} />
               ))}
+              {activeRole === 'Jungle' && skillBuild?.pet?.id ? (
+                <span className="dr-summ-pet" title="Jungle pet">
+                  <ItemIcon id={skillBuild.pet.id} size={40} />
+                </span>
+              ) : null}
               {!runes?.spells?.length ? <p className="dr-empty">No summoner page yet.</p> : null}
             </div>
           </div>
 
-          <div className="dr-block">
-            <header>
-              <div>
-                <h3>Items</h3>
-                {runes?.label ? <p className="dr-rune-kicker">{runes.label}</p> : null}
-              </div>
-            </header>
-            {status === 'loading' && !rows.length ? (
-              <p className="dr-empty">Loading recent pro games…</p>
-            ) : null}
-            {status === 'error' && !selectedBuild.hasResults ? (
-              <p className="dr-empty">Leaguepedia didn’t answer for items.</p>
-            ) : null}
-            {status !== 'loading' && status !== 'error' && !liveItems.length ? (
-              <p className="dr-empty">
-                {selectedBuild.hasResults
-                  ? 'No current-patch items on those scoreboards.'
-                  : 'No recent pro games on this champion for this role.'}
-              </p>
-            ) : null}
-            {liveItems.length ? (
-              <>
-                <div className="dr-items">
-                  {liveItems.map((item) => (
-                      <span key={item.name} className="dr-item" title={item.name}>
-                        <ItemIcon id={item.id} size={40} title={item.name} />
-                        <em>{item.name}</em>
-                        {selectedBuild.hasWins ? (
-                          <b>{item.w}/{item.n}</b>
-                        ) : (
-                          <b>{item.gold ? `${item.gold}g` : `${item.n}`}</b>
-                        )}
-                      </span>
-                  ))}
+          {liveItems.length ? (
+            <div className="dr-block">
+              <header>
+                <div>
+                  <h3>Items</h3>
+                  {runes?.label ? <p className="dr-rune-kicker">{runes.label}</p> : null}
                 </div>
-                <p className="dr-hint">
-                  {selectedBuild.mixed
-                    ? `No games on this keystone — most built in ${selectedBuild.games} recent Leaguepedia games.`
-                    : selectedBuild.hasWins
-                      ? `Sorted by wins in ${selectedBuild.games} Leaguepedia games on this keystone — end-game items, not a sitewide winrate.`
-                      : `Most built in ${selectedBuild.games} Leaguepedia games on this keystone — end-game items, not a winrate.`}
-                </p>
-              </>
-            ) : null}
-          </div>
+              </header>
+              <div className="dr-items">
+                {liveItems.map((item) => (
+                    <span key={item.name} className="dr-item" title={item.name}>
+                      <ItemIcon id={item.id} size={40} title={item.name} />
+                      <em>{item.name}</em>
+                      {selectedBuild.hasWins ? (
+                        <b>{item.w}/{item.n}</b>
+                      ) : (
+                        <b>{item.gold ? `${item.gold}g` : `${item.n}`}</b>
+                      )}
+                    </span>
+                ))}
+              </div>
+              <p className="dr-hint">
+                {selectedBuild.mixed
+                  ? `No games on this keystone — most built in ${selectedBuild.games} recent Leaguepedia games.`
+                  : selectedBuild.hasWins
+                    ? `Sorted by wins in ${selectedBuild.games} Leaguepedia games on this keystone — end-game items, not a sitewide winrate.`
+                    : `Most built in ${selectedBuild.games} Leaguepedia games on this keystone — end-game items, not a winrate.`}
+              </p>
+            </div>
+          ) : null}
 
           {kit?.spells?.length ? (
             <div className="dr-block">
               <header>
-                <h3>Abilities</h3>
+                <h3>Skill priority</h3>
               </header>
-              <div className="dr-kit">
-                {kit.passive?.image?.full ? (
-                  <img
-                    src={champPassiveImgUrl(kit.passive.image.full, kit.version)}
-                    alt={kit.passive.name}
-                    title={kit.passive.name}
-                  />
-                ) : null}
-                {kit.spells.map((spell) => (
-                  <img
-                    key={spell.id}
-                    src={champSpellImgUrl(spell.image.full, kit.version)}
-                    alt={spell.name}
-                    title={spell.name}
-                  />
-                ))}
-              </div>
-              <p className="dr-hint">Champion kit — not a skill-order sample.</p>
+              {skillBuild?.skills?.order?.length ? (
+                <>
+                  <SkillPriority kit={kit} skills={skillBuild.skills} size={40} />
+                  <p className="dr-hint">
+                    {`Max order in ${Number(skillBuild.skills.games || 0).toLocaleString()} Lolalytics emerald+ games — not a guess.`}
+                  </p>
+                </>
+              ) : (
+                <p className="dr-empty">No ranked skill-order sample for this champion yet.</p>
+              )}
             </div>
           ) : null}
 
@@ -894,9 +886,9 @@ function Loadout({
             </header>
             <RuneTree page={runes} trees={trees} />
             {runes?.note ? <p className="dr-note">{runes.note}</p> : null}
-            <button type="button" className="dr-send" onClick={onSend} disabled={sending || !runes}>
+            <button type="button" className="dr-send" onClick={() => onSend()} disabled={sending || !runes}>
               {runes?.selectedPerkIds?.[0] ? <RuneIcon id={runes.selectedPerkIds[0]} size={20} /> : null}
-              {sending ? 'Sending…' : 'Send to League'}
+              {sending ? 'Sending…' : 'Send runes & spells'}
             </button>
           </div>
           {runeMsg ? <p className="dr-hint">{runeMsg}</p> : null}

@@ -10,10 +10,25 @@ function snapKey(riotId, mode) {
   return `rift-lp-snap:${String(riotId || '').toLowerCase()}:${mode}`;
 }
 
+// Ranked games move tens of LP, not thousands. U.GG sends a sentinel
+// (e.g. -9992) on old matches where they have no delta — same junk on
+// wins and losses. Snapshot logic already uses ±50.
+const MAX_LP_DELTA = 80;
+
+export function isPlausibleLpDelta(value) {
+  const n = Number(value);
+  return Number.isFinite(n) && n !== 0 && Math.abs(n) <= MAX_LP_DELTA;
+}
+
 export function readLpMap(riotId, mode) {
   try {
     const raw = JSON.parse(localStorage.getItem(mapKey(riotId, mode)) || '{}');
-    return raw && typeof raw === 'object' ? raw : {};
+    if (!raw || typeof raw !== 'object') return {};
+    const clean = {};
+    for (const [id, value] of Object.entries(raw)) {
+      if (isPlausibleLpDelta(value)) clean[id] = Math.round(Number(value));
+    }
+    return clean;
   } catch {
     return {};
   }
@@ -21,19 +36,17 @@ export function readLpMap(riotId, mode) {
 
 export function rememberLpDelta(riotId, mode, matchId, lpDelta) {
   if (!riotId || !mode || !matchId) return;
-  const n = Number(lpDelta);
-  if (!Number.isFinite(n) || n === 0) return;
+  if (!isPlausibleLpDelta(lpDelta)) return;
   const map = readLpMap(riotId, mode);
-  map[matchId] = Math.round(n);
+  map[matchId] = Math.round(Number(lpDelta));
   try {
     localStorage.setItem(mapKey(riotId, mode), JSON.stringify(map));
   } catch { /* quota */ }
 }
 
 export function formatLpDelta(value, estimated = false) {
-  const n = Number(value);
-  if (!Number.isFinite(n) || n === 0) return null;
-  const rounded = Math.round(n);
+  if (!isPlausibleLpDelta(value)) return null;
+  const rounded = Math.round(Number(value));
   return `${estimated ? '~' : ''}${rounded > 0 ? '+' : ''}${rounded} LP`;
 }
 
@@ -77,7 +90,7 @@ export function attachEstimatedLp(games, { visibleMmr, hiddenMmr, lobbyMmrs } = 
   const list = Array.isArray(games) ? games : [];
   const now = Date.now();
   return list.map((g) => {
-    if (g?.lpDelta != null && Number.isFinite(Number(g.lpDelta)) && Number(g.lpDelta) !== 0) return g;
+    if (isPlausibleLpDelta(g?.lpDelta)) return g;
     if (g?.queueId !== 420 && g?.queueId !== 440) return g;
     if ((Number(g.durationMin) || 0) < 5) return g;
     const ended = Number(g.endedAt);
@@ -105,7 +118,7 @@ export function applyTrackedLp(games, lpByNumericId, riotId, mode) {
   return games.map((g) => {
     const id = matchNumericId(g.matchId);
     const n = Number(id ? map[id] : null);
-    if (!Number.isFinite(n) || n === 0) return g;
+    if (!isPlausibleLpDelta(n)) return g;
     rememberLpDelta(riotId, mode, g.matchId, n);
     return { ...g, lpDelta: Math.round(n), lpDeltaEst: null };
   });
@@ -118,7 +131,7 @@ export function applyLpNotes(games, notes, riotId, mode, queueId) {
   const next = {};
   for (const note of notes || []) {
     const delta = Math.round(Number(note?.lpDelta));
-    if (!Number.isFinite(delta) || delta === 0) continue;
+    if (!isPlausibleLpDelta(delta)) continue;
     const gid = note.gameId != null ? String(note.gameId) : '';
     let target = gid
       ? ranked.find((g) => matchNumericId(g.matchId) === gid)

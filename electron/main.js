@@ -175,6 +175,7 @@ app.whenReady().then(() => {
   registerFeedbackHandlers(ipcMain);
   require('./season-peak')(ipcMain);
   require('./ugg-lp')(ipcMain);
+  require('./meta-builds')(ipcMain);
   recorder.register(ipcMain);
   require('./updater').register({
     getWindow: () => mainWindow,

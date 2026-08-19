@@ -1,3 +1,5 @@
+import { rarityFromRaw } from './skinRarity';
+
 const CDRAGON = 'https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/global/default';
 const CHROMA_COLORS = 'Jade|Ruby|Sapphire|Emerald|Obsidian|Pearl|Catseye|Tanzanite|Turquoise|Amethyst|Citrine|Peridot|Sandstone|Aquamarine|Rainbow|Pariah';
 const CHROMA_PREFIX = new RegExp(`^(${CHROMA_COLORS})(?=[A-Z])`);
@@ -50,6 +52,8 @@ export function getSkinsMeta() {
             name: entry.name,
             collectible,
             isBase: !!entry.isBase,
+            isLegacy: !!entry.isLegacy,
+            rarity: rarityFromRaw(entry.rarity),
             tile: lcuAssetUrl(entry.loadScreenPath || entry.tilePath || entry.uncenteredSplashPath),
             splash: lcuAssetUrl(entry.uncenteredSplashPath || entry.splashPath),
           });

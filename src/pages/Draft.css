@@ -559,7 +559,13 @@
   padding: 3px 8px;
 }
 .dr-imported::before { content: '✓ '; }
-.dr-summs { display: flex; gap: 8px; }
+.dr-summs { display: flex; gap: 8px; align-items: center; }
+.dr-summ-pet {
+  margin-left: 4px;
+  padding-left: 12px;
+  border-left: 1px solid rgba(255,255,255,0.12);
+}
+.dr-block .dr-skill-prio { margin-bottom: 0; }
 .dr-items {
   display: flex;
   flex-wrap: wrap;
