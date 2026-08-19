@@ -17,6 +17,7 @@ import Compare from './pages/Compare';
 import Collections from './pages/Collections';
 import Draft from './pages/Draft';
 import Spectate from './pages/Spectate';
+import Pros from './pages/Pros';
 
 export default function App() {
   return (
@@ -36,6 +37,7 @@ export default function App() {
             <Route path="/tierlist" element={<Navigate to="/" replace />} />
             <Route path="/draft" element={<Draft />} />
             <Route path="/spectate" element={<Spectate />} />
+            <Route path="/pros" element={<Pros />} />
             <Route path="/overlays" element={<Navigate to="/" replace />} />
             <Route path="/link-account" element={<LinkAccount />} />
             <Route path="/login" element={<Login />} />

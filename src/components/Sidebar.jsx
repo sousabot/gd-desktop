@@ -143,7 +143,7 @@ const NAV_GROUPS = [
   {
     labelKey: 'nav.insights',
     items: [
-      { labelKey: 'nav.esports', icon: <IconEsports />, soon: true },
+      { to: '/pros', labelKey: 'nav.esports', icon: <IconEsports /> },
     ],
   },
 ];

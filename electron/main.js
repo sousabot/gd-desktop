@@ -70,10 +70,10 @@ function createTray() {
 
 function createWindow() {
   mainWindow = new BrowserWindow({
-    width: 1360,
-    height: 860,
-    minWidth: 1100,
-    minHeight: 720,
+    width: 1520,
+    height: 920,
+    minWidth: 1280,
+    minHeight: 780,
     backgroundColor: '#0b0e16',
     icon: path.join(__dirname, 'icon.png'),
     frame: false,
@@ -176,6 +176,7 @@ app.whenReady().then(() => {
   require('./season-peak')(ipcMain);
   require('./ugg-lp')(ipcMain);
   require('./meta-builds')(ipcMain);
+  require('./pros')(ipcMain);
   recorder.register(ipcMain);
   require('./updater').register({
     getWindow: () => mainWindow,

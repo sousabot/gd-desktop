@@ -61,7 +61,7 @@ async function query(champion, role, since) {
   const res = await fetch(url, {
     headers: {
       Accept: 'application/json',
-      'User-Agent': 'RiftDesktop/0.1.12 (https://github.com/sousabot/rift-desktop; draft-probuilds)',
+      'User-Agent': 'RiftDesktop/0.1.13 (https://github.com/sousabot/rift-desktop; draft-probuilds)',
     },
     signal: AbortSignal.timeout(12000),
   });

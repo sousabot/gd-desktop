@@ -1,7 +1,7 @@
 /* Change this after you create the GitHub repo, then push. */
 window.RIFT_SITE = {
   product: 'Rift.lol',
-  version: '0.1.12',
+  version: '0.1.13',
   github: 'sousabot/rift-desktop',
   contact: 'Rift.lol',
 };
