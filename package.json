@@ -9,21 +9,16 @@
   "repository": "https://github.com/sousabot/rift-desktop",
   "main": "electron/main.js",
   "private": true,
-  "overwolf": {
-    "packages": [
-      "overlay"
-    ]
-  },
   "scripts": {
-    "dev": "concurrently -k \"vite\" \"wait-on http://localhost:5173 && node electron/dev-ow.js\"",
+    "dev": "concurrently -k \"vite\" \"wait-on http://localhost:5173 && node electron/dev-electron.js\"",
     "build": "vite build",
-    "start": "ow-electron .",
+    "start": "electron .",
     "preview": "vite preview",
     "server": "node server/index.js",
     "dist": "node server/prepare-client-env.js && vite build && node scripts/electron-build.cjs",
     "dist:portable": "node server/prepare-client-env.js && vite build && node scripts/electron-build.cjs --portable",
-    "dist:ow": "node server/prepare-client-env.js && vite build && node scripts/electron-build.cjs --portable",
-    "release": "node server/prepare-client-env.js && vite build && node scripts/electron-build.cjs --release"
+    "release": "node server/prepare-client-env.js && vite build && node scripts/electron-build.cjs --release",
+    "site:version": "node scripts/sync-site-version.js"
   },
   "dependencies": {
     "dotenv": "^16.4.5",
@@ -34,8 +29,6 @@
     "react-router-dom": "^6.26.2"
   },
   "devDependencies": {
-    "@overwolf/ow-electron": "latest",
-    "@overwolf/ow-electron-builder": "latest",
     "@vitejs/plugin-react": "^4.3.1",
     "concurrently": "^8.2.2",
     "electron": "^31.3.0",

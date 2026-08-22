@@ -3,132 +3,341 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Rift.lol</title>
+  <title>Rift.lol — Win more. Think less.</title>
   <link rel="icon" href="./icon.png" />
-  <meta name="description" content="Windows desktop app for League of Legends stats: dashboard, live scouting, match history, champion pool, and player compare." />
+  <meta name="description" content="Rift.lol is a Windows desktop app for League of Legends: ranked dashboard, draft builds, in-game overlays, collections, and Lens insights." />
+  <meta property="og:title" content="Rift.lol — League desktop app" />
+  <meta property="og:description" content="Stats, draft tools, match scout, and in-game HUD overlays for League of Legends on Windows." />
+  <meta property="og:type" content="website" />
+  <meta name="theme-color" content="#08090e" />
   <link rel="stylesheet" href="./styles.css" />
 </head>
-<body>
-  <div class="wrap">
-    <nav class="nav">
+<body class="site">
+  <nav class="topnav">
+    <div class="topnav-inner">
       <a class="brand" href="./index.html">
-        <span class="mark" aria-hidden="true"></span>
-        <strong>Rift.lol</strong>
+        <img class="brand-mark" src="./logo-mark.png" alt="" width="28" height="28" />
+        <strong>RIFT.LOL</strong>
       </a>
-      <div class="nav-links">
-        <a href="#features">Features</a>
-        <a href="./roadmap.html">Roadmap</a>
+      <div class="topnav-links">
+        <a href="#inside">Features</a>
         <a href="#download">Download</a>
-        <a href="./privacy.html">Privacy</a>
-        <a href="./terms.html">Terms</a>
+        <a href="#premium">Premium</a>
+        <a href="#faq">FAQ</a>
+        <a href="./roadmap.html">Roadmap</a>
       </div>
-    </nav>
+      <div class="topnav-actions">
+        <a class="btn btn-gold" id="navDownload" href="#download">Get Rift App</a>
+      </div>
+    </div>
+  </nav>
 
-    <header class="hero">
-      <div class="kicker">League of Legends · Windows</div>
-      <h1>Your ranked games,<br>read like a review.</h1>
-      <p class="lead">
-        Rift.lol is a local Windows app for players who want ranked context:
-        live scouting, post-game recap, champion pool, and match history — linked to your own Riot ID.
-      </p>
-      <div class="cta" id="download">
-        <a class="btn btn-primary" id="downloadBtn" href="#download">Download for Windows</a>
-        <a class="btn btn-ghost" id="releasesBtn" href="#download">GitHub Releases</a>
+  <header class="hero">
+    <div class="hero-inner">
+      <div class="hero-copy">
+        <h1>Win more.<br /><span class="gold">Think less.</span></h1>
+        <p class="lead">
+          You’re not hardstuck — you’re playing blind. Rift.lol reads your ranked games,
+          drafts, and fights with you — so you climb with real numbers, not vibes.
+        </p>
+        <div class="hero-cta">
+          <a class="btn btn-gold btn-xl" id="downloadSetup" href="#download">Get the app</a>
+          <a class="link-discover" href="#inside">Discover <span aria-hidden="true">→</span></a>
+        </div>
+        <p class="hero-price">Free to start · Premium from €4.99/mo · Cancel anytime</p>
+        <div class="hero-meta">
+          <span>Windows</span>
+          <i></i>
+          <span>Standalone app</span>
+          <i></i>
+          <span>Riot compliant</span>
+        </div>
       </div>
-      <p class="note" id="downloadNote">v0.1.0 · Windows 10/11 · unsigned beta</p>
-      <p class="note">Windows SmartScreen will warn because the build is not code-signed. Click <strong>More info</strong>, then <strong>Run anyway</strong>. The app does not contain a Riot API key.</p>
-    </header>
-
-    <div class="window" aria-hidden="true">
-      <div class="window-bar">
-        <span class="dot"></span>
-        Rift.lol
-      </div>
-      <div class="window-body">
-        <aside class="side">
-          <div class="on">Dashboard</div>
-          <div>History</div>
-          <div>Champions</div>
-          <div>Live Status</div>
-          <div>Compare</div>
-        </aside>
-        <div class="main">
-          <div class="stat-row">
-            <div class="stat"><span>KDA</span><strong>2.9</strong></div>
-            <div class="stat"><span>CS/min</span><strong>5.7</strong></div>
-            <div class="stat"><span>Gold @15</span><strong>+210</strong></div>
-            <div class="stat"><span>KP</span><strong>0.51</strong></div>
-          </div>
+      <div class="hero-visual">
+        <div class="app-glow">
+          <img
+            src="./screens/app-dashboard.png"
+            alt="Rift.lol dashboard showing rank, KP, CS/min, and recent Solo/Duo games"
+            width="1280"
+            height="800"
+            loading="eager"
+          />
         </div>
       </div>
     </div>
+  </header>
 
-    <section id="features" class="grid">
-      <article class="card">
-        <h3>Dashboard</h3>
-        <p>Rank, LP, KDA, DPM, vision, gold diff @15, and recent form from your linked Riot ID.</p>
-      </article>
-      <article class="card">
-        <h3>Live Status</h3>
-        <p>See the current game: champions, runes, ranked WR, last 3 results, and dodge warnings.</p>
-      </article>
-      <article class="card">
-        <h3>Match history</h3>
-        <p>Scrollable list with Solo / Flex / ARAM / Normal filters. Open a recap with build and gold @15.</p>
-      </article>
-      <article class="card">
-        <h3>Champions</h3>
-        <p>Pool stats per champion: games, winrate, KDA, and CS per minute.</p>
-      </article>
-      <article class="card">
-        <h3>Compare</h3>
-        <p>Side-by-side rank, winrate, shared champions, and recent form for two Riot IDs.</p>
-      </article>
-      <article class="card">
-        <h3>Your account only</h3>
-        <p>You link Name#Tag. Data is fetched from Riot on demand for that player. Not a public scraper.</p>
-      </article>
-    </section>
-
-    <p class="riot">
-      Rift.lol isn't endorsed by Riot Games and doesn't reflect the views or opinions of Riot Games
-      or anyone officially involved in producing or managing League of Legends.
-      League of Legends and Riot Games are trademarks or registered trademarks of Riot Games, Inc.
+  <section class="inside" id="inside">
+    <p class="section-kicker">Inside the app</p>
+    <h2 class="section-title">Everything you need to actually climb.</h2>
+    <p class="section-sub">
+      You draft ahead, read every fight, and never lose the context — while you focus on getting better.
     </p>
-  </div>
+  </section>
+
+  <section class="feature" id="features">
+    <div class="feature-inner">
+      <div class="feature-copy">
+        <span class="feature-num" aria-hidden="true">01</span>
+        <p class="feature-label">Draft assistant</p>
+        <h3>Win the game in champ select</h3>
+        <p>
+          Live draft lean, pick grades, and Lolalytics emerald+ builds — runes, summoners,
+          starters, and skill order ready to send into League.
+        </p>
+        <ul class="check-list">
+          <li>Draft win probability &amp; team comps</li>
+          <li>Most played / alt / situational builds</li>
+          <li>One-click runes &amp; items into League</li>
+        </ul>
+        <a class="btn btn-gold" href="#download">Get the app →</a>
+      </div>
+      <div class="feature-media">
+        <img
+          src="./screens/app-draft.png"
+          alt="Draft view with team lean, Tristana build, runes and skill priority"
+          loading="lazy"
+        />
+      </div>
+    </div>
+  </section>
+
+  <section class="feature">
+    <div class="feature-inner">
+      <div class="feature-copy">
+        <span class="feature-num" aria-hidden="true">02</span>
+        <p class="feature-label">In-game overlay</p>
+        <h3>See the fight before it starts</h3>
+        <p>
+          The reads that separate a good player from a hardstuck one — live on your screen
+          the moment they matter. Stop guessing at fights, timers, and builds.
+        </p>
+        <ul class="check-list">
+          <li>Win probability &amp; gold lead</li>
+          <li>Objective timers</li>
+          <li>Item &amp; build suggestions</li>
+          <li>Skill-up &amp; trinket reminders</li>
+        </ul>
+        <p class="feature-footnote">Plenty more overlays · drag any of them anywhere</p>
+        <a class="btn btn-gold" href="#download">Get the app →</a>
+      </div>
+      <div class="feature-media">
+        <img
+          src="./screens/app-overlays.png"
+          alt="In-game overlays: win probability, item suggest, skill-up, trinket reminder, and benchmark HUD"
+          loading="lazy"
+        />
+      </div>
+    </div>
+  </section>
+
+  <section class="feature is-flip">
+    <div class="feature-inner">
+      <div class="feature-copy">
+        <span class="feature-num" aria-hidden="true">03</span>
+        <p class="feature-label">Ranked dashboard</p>
+        <h3>Your climb, reviewed like a coach</h3>
+        <p>
+          Rank, LP, KDA, rift score, KP, CS/min, vision, gold @15 — plus live status and
+          recent Solo/Duo form on one screen.
+        </p>
+        <ul class="check-list">
+          <li>Peak, MMR estimate &amp; winrate</li>
+          <li>Per-game early / mid / late review</li>
+          <li>Search any Name#TAG</li>
+        </ul>
+        <a class="btn btn-gold" href="#download">Get the app →</a>
+      </div>
+      <div class="feature-media">
+        <img
+          src="./screens/app-dashboard.png"
+          alt="Dashboard with Platinum I rank card and performance sparklines"
+          loading="lazy"
+        />
+      </div>
+    </div>
+  </section>
+
+  <section class="feature">
+    <div class="feature-inner">
+      <div class="feature-copy">
+        <span class="feature-num" aria-hidden="true">04</span>
+        <p class="feature-label">Collections</p>
+        <h3>Every skin, valued from the client</h3>
+        <p>
+          Pull your owned skins straight from the League client — rarity breakdown, RP total,
+          and a grid that feels like your wardrobe, not a spreadsheet.
+        </p>
+        <ul class="check-list">
+          <li>Owned vs total skins</li>
+          <li>Account value in RP</li>
+          <li>Rarity chips &amp; quick search</li>
+        </ul>
+        <a class="btn btn-gold" href="#download">Get the app →</a>
+      </div>
+      <div class="feature-media">
+        <img
+          src="./screens/app-collections.png"
+          alt="Collections grid with owned skins and RP valuation"
+          loading="lazy"
+        />
+      </div>
+    </div>
+  </section>
+
+  <section class="feature is-flip">
+    <div class="feature-inner">
+      <div class="feature-copy">
+        <span class="feature-num" aria-hidden="true">05</span>
+        <p class="feature-label">Rift Lens · Premium</p>
+        <h3>See the fight before it starts</h3>
+        <p>
+          Lens breaks fighting, laning, objectives, vision, and team impact across your last
+          games — with sparklines and rank benchmarks.
+        </p>
+        <ul class="check-list">
+          <li>Damage / min by game phase</li>
+          <li>Kill participation vs ranks</li>
+          <li>Duels, skirmishes &amp; multi-kills</li>
+        </ul>
+        <a class="btn btn-gold" href="#premium">Get Premium →</a>
+      </div>
+      <div class="feature-media">
+        <img
+          src="./screens/app-lens.png"
+          alt="Lens fighting tab with damage per minute and kill participation chart"
+          loading="lazy"
+        />
+      </div>
+    </div>
+  </section>
+
+  <section class="download" id="download">
+    <p class="section-kicker">Download</p>
+    <h2 class="section-title">Get Rift.lol for Windows</h2>
+    <p class="section-sub">Windows installer with auto-updates when a new version ships.</p>
+    <div class="dl-row dl-row--single">
+      <article class="dl-card is-hot">
+        <h3>Installer</h3>
+        <p>Shortcut, uninstaller, and in-app updates when a new version ships.</p>
+        <a class="btn btn-gold btn-block" id="downloadSetupBottom" href="#download">Download Setup</a>
+        <code class="dl-file" id="setupMeta">Rift.lol-Setup-0.1.13.exe</code>
+      </article>
+    </div>
+    <p class="dl-note">
+      <span data-version>v0.1.13</span> · Windows 10/11 · Unsigned beta — SmartScreen: <strong>More info → Run anyway</strong>.
+      Overlays need Borderless or Windowed in League (Esc → Video).
+    </p>
+  </section>
+
+  <section class="premium" id="premium">
+    <p class="section-kicker">Premium</p>
+    <h2 class="section-title">Everything you unlock</h2>
+    <p class="section-sub">Core tools stay free. Lens, Data Studio, and deeper insights unlock with Premium.</p>
+    <div class="price-row">
+      <article class="price-card">
+        <h3>1 month</h3>
+        <p class="price">€4.99<span>/mo</span></p>
+        <p class="price-note">Billed monthly · No commitment</p>
+        <a class="btn btn-gold btn-block" href="#download">Get Premium · €4.99</a>
+      </article>
+      <article class="price-card is-hot">
+        <span class="dl-badge">Most popular</span>
+        <h3>6 months</h3>
+        <p class="price">€19.99<span>/6 mo</span></p>
+        <p class="price-note">€3.33/mo · Save 33%</p>
+        <a class="btn btn-gold btn-block" href="#download">Get Premium · €19.99</a>
+      </article>
+      <article class="price-card">
+        <h3>1 year</h3>
+        <p class="price">€35.99<span>/yr</span></p>
+        <p class="price-note">€3.00/mo · Save 40%</p>
+        <a class="btn btn-gold btn-block" href="#download">Get Premium · €35.99</a>
+      </article>
+    </div>
+    <div class="price-trust">
+      <span>Secure checkout</span>
+      <span>Cancel anytime</span>
+      <span>Instant access</span>
+      <span>App on every plan</span>
+    </div>
+  </section>
+
+  <section class="faq" id="faq">
+    <p class="section-kicker">FAQ</p>
+    <h2 class="section-title">Everything you need to know</h2>
+    <div class="faq-list">
+      <details class="faq-item">
+        <summary>What is Rift Premium?</summary>
+        <p>Premium unlocks Rift Lens, Data Studio, and deeper insights on top of the free desktop app — dashboard, draft, overlays, spectate, and collections stay available on every plan.</p>
+      </details>
+      <details class="faq-item">
+        <summary>Does the app work on Windows and Mac?</summary>
+        <p>Rift.lol is Windows-only for now (Windows 10/11). A Mac build is not available yet.</p>
+      </details>
+      <details class="faq-item">
+        <summary>Is the Rift app allowed by Riot?</summary>
+        <p>Yes. Rift uses Riot’s official APIs and League’s local Live Client Data for overlays. It does not inject into the game client or automate play. Always follow Riot’s Terms of Service.</p>
+      </details>
+      <details class="faq-item">
+        <summary>How do I install the app?</summary>
+        <p>Download the Setup installer from this page, run it, then link your Riot ID (Name#TAG) in the app. If Windows SmartScreen warns, click <strong>More info</strong>, then <strong>Run anyway</strong> — the build is not code-signed yet.</p>
+      </details>
+      <details class="faq-item">
+        <summary>How can I cancel my Premium subscription?</summary>
+        <p>Cancel anytime from your Stripe customer portal or the Premium page in the app. You keep access until the end of the billing period you already paid for.</p>
+      </details>
+      <details class="faq-item">
+        <summary>How can I change my subscription tier?</summary>
+        <p>Pick a different plan (1 month, 6 months, or 1 year) on the Premium page in the app. Upgrades and renewals are handled through checkout; you won’t be double-billed for unused time when Stripe is configured.</p>
+      </details>
+      <details class="faq-item">
+        <summary>What is Rift Lens?</summary>
+        <p>Lens is a Premium insight view across your recent games — fighting, laning, objectives, vision, survivability, and team impact, with sparklines and rank benchmarks.</p>
+      </details>
+      <details class="faq-item">
+        <summary>Can I use Lens on more than one account?</summary>
+        <p>Premium is tied to your device and the Riot ID you link in the app. You can switch the linked account, but each Premium seat is meant for one active player setup — not unlimited shared logins.</p>
+      </details>
+      <details class="faq-item">
+        <summary>How do I link my Riot account?</summary>
+        <p>Open <strong>Link Account</strong> in the app, enter your Riot Name and TAG, and verify. Stats, draft, and scout then load for that player on your PC.</p>
+      </details>
+      <details class="faq-item">
+        <summary>Do overlays work in Exclusive Fullscreen?</summary>
+        <p>No. Use <strong>Borderless</strong> or <strong>Windowed</strong> in League (Esc → Video). Exclusive Fullscreen cannot show a desktop HUD on top of the game.</p>
+      </details>
+    </div>
+  </section>
+
+  <p class="riot">
+    Rift.lol isn't endorsed by Riot Games and doesn't reflect the views or opinions of Riot Games
+    or anyone officially involved in producing or managing League of Legends.
+    League of Legends and Riot Games are trademarks or registered trademarks of Riot Games, Inc.
+  </p>
 
   <footer class="foot">
-    <div class="wrap" style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;width:min(1080px, calc(100% - 40px));">
+    <div class="foot-inner">
       <span>© <span id="year"></span> Rift.lol</span>
       <span>
-        <a href="./privacy.html">Privacy Policy</a> ·
-        <a href="./terms.html">Terms of Service</a>
+        <a href="./privacy.html">Privacy</a> ·
+        <a href="./terms.html">Terms</a> ·
+        <a href="./roadmap.html">Roadmap</a>
       </span>
     </div>
   </footer>
 
+  <div class="sticky-bar" aria-label="Premium offer">
+    <div class="sticky-inner">
+      <div class="sticky-copy">
+        <img src="./logo-mark.png" alt="" width="22" height="22" />
+        <span>Rift Premium — Lens &amp; Studio from <strong>€4.99/mo</strong></span>
+      </div>
+      <a class="btn btn-gold btn-sm" href="#premium">Get Premium →</a>
+    </div>
+  </div>
+
   <script src="./config.js"></script>
-  <script>
-    document.getElementById('year').textContent = new Date().getFullYear();
-    const cfg = window.RIFT_SITE || {};
-    const btn = document.getElementById('downloadBtn');
-    const rel = document.getElementById('releasesBtn');
-    const note = document.getElementById('downloadNote');
-    if (cfg.version) note.textContent = 'v' + cfg.version + ' · Windows 10/11 · unsigned beta (SmartScreen may warn)';
-    if (cfg.github) {
-      const base = 'https://github.com/' + cfg.github;
-      rel.href = base + '/releases/latest';
-      btn.href = base + '/releases/latest';
-    } else {
-      btn.addEventListener('click', (e) => {
-        e.preventDefault();
-        alert('Create a GitHub repo, set github in site/config.js, then this button will point at Releases.');
-      });
-      rel.addEventListener('click', (e) => {
-        e.preventDefault();
-        alert('Set window.RIFT_SITE.github in site/config.js to yourname/repo.');
-      });
-    }
-  </script>
+  <script src="./site.js"></script>
 </body>
 </html>

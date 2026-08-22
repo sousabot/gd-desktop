@@ -13,8 +13,14 @@ the new base and port over anything custom you want to keep.
 
 ## Product site
 
-The public landing page, privacy policy, and terms live in `docs/`.
-GitHub Pages serves that folder at `https://sousabot.github.io/rift-desktop/`.
+The public landing page, privacy policy, and terms live in **`docs/`**.
+
+- **GitHub Pages:** `https://sousabot.github.io/rift-desktop/` (enable Pages → branch `main`, folder `/docs`)
+- **Custom domain:** add `rift.lol` in GitHub repo Settings → Pages, then create `docs/CNAME` with `rift.lol` and point DNS `CNAME`/`A` at GitHub
+
+After each release, run `npm run site:version` so download links match `package.json`, then push `docs/`.
+
+Download buttons link to GitHub Releases assets (`Rift.lol-Setup-x.x.x.exe` and portable).
 
 ```bash
 npm run dist          # Windows installer + portable

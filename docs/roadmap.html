@@ -17,6 +17,7 @@
       </a>
       <div class="nav-links">
         <a href="./index.html">Home</a>
+        <a href="./index.html#download">Download</a>
         <a href="./roadmap.html">Roadmap</a>
         <a href="./privacy.html">Privacy</a>
         <a href="./terms.html">Terms</a>
@@ -31,7 +32,7 @@
         This board is the public plan — dates move, the direction does not.
       </p>
       <div class="rm-meta">
-        <span>Windows app <strong>v0.1.0</strong></span>
+        <span>Windows app <strong data-version>v0.1.13</strong></span>
         <span>Updated <strong>15 Aug 2026</strong></span>
         <span>Want something on here? Use <strong>Report feedback</strong> in the app.</span>
       </div>
@@ -144,6 +145,13 @@
       </span>
     </div>
   </footer>
-  <script>document.getElementById('year').textContent = new Date().getFullYear();</script>
+  <script src="./config.js"></script>
+  <script>
+    document.getElementById('year').textContent = new Date().getFullYear();
+    document.querySelectorAll('[data-version]').forEach((el) => {
+      const v = window.RIFT_SITE?.version;
+      if (v) el.textContent = 'v' + v;
+    });
+  </script>
 </body>
 </html>
